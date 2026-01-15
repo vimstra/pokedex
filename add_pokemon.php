@@ -48,12 +48,13 @@ try {
 
         try {
             $sql = "INSERT INTO public.pokemon 
-                    (pokedex_number, name, image_url, pokemon_type, secondary_type, description, height, weight, hp, attack, defense, sp_attack, sp_defense, speed, generation_id) 
-                    VALUES (?, ?, ?, ?::public.element_type, ?::public.element_type, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    (pokedex_number, name, image_url, pokemon_type, secondary_type, description, height, weight, hp, attack, defense, sp_attack, sp_defense, speed, generation_id, created_by) 
+                    VALUES (?, ?, ?, ?::public.element_type, ?::public.element_type, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
                     RETURNING id";
             
             $stmt = $pdo->prepare($sql);
-            $stmt->execute([$dexNum, $name, $img, $type1, $type2, $desc, $height, $weight, $hp, $atk, $def, $spa, $spd, $spe]);
+            $stmt->execute([$dexNum, $name, $img, $type1, $type2, $desc, $height, $weight, $hp, $atk, $def, $spa, $spd, $spe, $_POST['generation_id'],
+                $_SESSION['user_id']]);
             
             $newPokemonId = $stmt->fetchColumn();
 

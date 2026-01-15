@@ -26,9 +26,11 @@ try {
     $sql = "SELECT p.*, 
                    p.pokemon_type::text as type_1, 
                    p.secondary_type::text as type_2,
-                   g.name as gen_name 
+                   g.name as gen_name,
+                   u.username as creator_name  -- Pobieramy nazwę autora
             FROM public.pokemon p
             LEFT JOIN public.generation g ON p.generation_id = g.id
+            LEFT JOIN public.users u ON p.created_by = u.user_id -- Relacja 1-N
             WHERE p.id = ?";
             
     $stmt = $pdo->prepare($sql);
@@ -384,6 +386,14 @@ function formatTrigger($row) {
                                 </div>
                             </div>
                         <?php endforeach; ?>
+                    </div>
+
+                    <div style="margin-top: 20px; font-size: 0.8rem; color: #aaa; text-align: right;">
+                        <?php if (!empty($pokemon['creator_name'])): ?>
+                            Entry added by: <strong><?= htmlspecialchars($pokemon['creator_name']) ?></strong>
+                        <?php else: ?>
+                            Entry added by: <em>System</em>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

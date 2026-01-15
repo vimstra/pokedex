@@ -1,4 +1,4 @@
--- enum for types (pokemon, moves, evolutions)
+-- 1. KONFIGURACJA TYPÓW (ENUMS)
 DO $$ BEGIN
     CREATE TYPE public.element_type AS ENUM (
         'Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Ice', 
@@ -9,25 +9,34 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
--- enum for user types
 DO $$ BEGIN
     CREATE TYPE public.user_role AS ENUM ('Admin', 'Common');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
--- generation table
+-- 2. TWORZENIE TABEL
+
+-- Users table (Musi być wcześniej, bo pokemon się do niej odwołuje)
+CREATE TABLE IF NOT EXISTS public.users (
+    user_id SMALLSERIAL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    role public.user_role NOT NULL DEFAULT 'Common'
+);
+
+-- Generation table
 CREATE TABLE IF NOT EXISTS public.generation (
     id SMALLSERIAL PRIMARY KEY,
     name TEXT NOT NULL
 );
 
--- pokemon table
+-- Pokemon table (Relacja 1-N: created_by odwołuje się do users)
 CREATE TABLE IF NOT EXISTS public.pokemon (
     id SMALLSERIAL PRIMARY KEY,
     pokedex_number INT2 NOT NULL,
     name TEXT NOT NULL,
     image_url TEXT,
     pokemon_type public.element_type NOT NULL,
-    secondary_type public.element_type, -- POPRAWIONO LITERÓWKĘ (było elementy_type)
+    secondary_type public.element_type,
     height NUMERIC(5, 2) NOT NULL,
     weight NUMERIC(5, 1) NOT NULL,
     description TEXT NOT NULL,
@@ -37,10 +46,11 @@ CREATE TABLE IF NOT EXISTS public.pokemon (
     sp_attack INT2 NOT NULL,
     sp_defense INT2 NOT NULL,
     speed INT2 NOT NULL,
-    generation_id INT2 NOT NULL
+    generation_id INT2 NOT NULL,
+    created_by INT4
 );
 
--- move table
+-- Move table
 CREATE TABLE IF NOT EXISTS public.move (
     id SMALLSERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -49,37 +59,29 @@ CREATE TABLE IF NOT EXISTS public.move (
     pp INT2 NOT NULL,
     power INT2,
     accuracy NUMERIC(3, 2),
-    description TEXT, -- DODANO KOLUMNĘ DESCRIPTION (zgodnie z wymaganiami)
+    description TEXT,
     generation_id INT2 NOT NULL
 );
 
--- pokemon_moves association table
+-- Pokemon_moves association table (N-M)
 CREATE TABLE IF NOT EXISTS public.pokemon_moves (
     pokemon_id INT4 NOT NULL,
     move_id INT4 NOT NULL,
     PRIMARY KEY (pokemon_id, move_id)
 );
 
--- evolution table
+-- Evolution table (1-N Autorelacja)
 CREATE TABLE IF NOT EXISTS public.evolution (
     pre_evolution_id INT4 NOT NULL,
     post_evolution_id INT4 NOT NULL,
     trigger_type public.element_type NOT NULL,
     min_level INT4,
     item TEXT,
-    notes TEXT,
+    notes TEXT, -- Zmieniono na TEXT dla prostszej obsługi
     PRIMARY KEY (pre_evolution_id, post_evolution_id)
 );
 
--- users table
-CREATE TABLE IF NOT EXISTS public.users (
-    user_id SMALLSERIAL PRIMARY KEY,
-    username TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    role public.user_role NOT NULL DEFAULT 'Common'
-);
-
--- type effectivness table
+-- Type effectiveness table
 CREATE TABLE IF NOT EXISTS public.type_effectiveness (
     attacking_type public.element_type NOT NULL,
     defending_type public.element_type NOT NULL,
@@ -87,7 +89,7 @@ CREATE TABLE IF NOT EXISTS public.type_effectiveness (
     PRIMARY KEY (attacking_type, defending_type)
 );
 
---favourites table
+-- Favourites table (N-M User Party)
 CREATE TABLE IF NOT EXISTS public.user_party (
     user_id INT4 NOT NULL,
     pokemon_id INT4 NOT NULL,
@@ -97,68 +99,104 @@ CREATE TABLE IF NOT EXISTS public.user_party (
     CONSTRAINT fk_party_pokemon FOREIGN KEY (pokemon_id) REFERENCES public.pokemon(id) ON DELETE CASCADE
 );
 
+-- 3. DEFINICJA RELACJI (KLUCZE OBCE)
 
-INSERT INTO public.type_effectiveness (attacking_type, defending_type, multiplier) VALUES
--- NORMAL
-('Normal', 'Rock', 0.5), ('Normal', 'Ghost', 0.0), ('Normal', 'Steel', 0.5),
--- FIRE
-('Fire', 'Fire', 0.5), ('Fire', 'Water', 0.5), ('Fire', 'Grass', 2.0), ('Fire', 'Ice', 2.0), ('Fire', 'Bug', 2.0), ('Fire', 'Rock', 0.5), ('Fire', 'Dragon', 0.5), ('Fire', 'Steel', 2.0),
--- WATER
-('Water', 'Fire', 2.0), ('Water', 'Water', 0.5), ('Water', 'Grass', 0.5), ('Water', 'Ground', 2.0), ('Water', 'Rock', 2.0), ('Water', 'Dragon', 0.5),
--- GRASS
-('Grass', 'Fire', 0.5), ('Grass', 'Water', 2.0), ('Grass', 'Grass', 0.5), ('Grass', 'Poison', 0.5), ('Grass', 'Ground', 2.0), ('Grass', 'Flying', 0.5), ('Grass', 'Bug', 0.5), ('Grass', 'Rock', 2.0), ('Grass', 'Dragon', 0.5), ('Grass', 'Steel', 0.5),
--- ELECTRIC
-('Electric', 'Water', 2.0), ('Electric', 'Grass', 0.5), ('Electric', 'Electric', 0.5), ('Electric', 'Ground', 0.0), ('Electric', 'Flying', 2.0), ('Electric', 'Dragon', 0.5),
--- ICE
-('Ice', 'Fire', 0.5), ('Ice', 'Water', 0.5), ('Ice', 'Grass', 2.0), ('Ice', 'Ice', 0.5), ('Ice', 'Ground', 2.0), ('Ice', 'Flying', 2.0), ('Ice', 'Dragon', 2.0), ('Ice', 'Steel', 0.5),
--- FIGHTING
-('Fighting', 'Normal', 2.0), ('Fighting', 'Ice', 2.0), ('Fighting', 'Poison', 0.5), ('Fighting', 'Flying', 0.5), ('Fighting', 'Psychic', 0.5), ('Fighting', 'Bug', 0.5), ('Fighting', 'Rock', 2.0), ('Fighting', 'Ghost', 0.0), ('Fighting', 'Dark', 2.0), ('Fighting', 'Steel', 2.0), ('Fighting', 'Fairy', 0.5),
--- POISON
-('Poison', 'Grass', 2.0), ('Poison', 'Poison', 0.5), ('Poison', 'Ground', 0.5), ('Poison', 'Rock', 0.5), ('Poison', 'Ghost', 0.5), ('Poison', 'Steel', 0.0), ('Poison', 'Fairy', 2.0),
--- GROUND
-('Ground', 'Fire', 2.0), ('Ground', 'Grass', 0.5), ('Ground', 'Electric', 2.0), ('Ground', 'Poison', 2.0), ('Ground', 'Flying', 0.0), ('Ground', 'Bug', 0.5), ('Ground', 'Rock', 2.0), ('Ground', 'Steel', 2.0),
--- FLYING
-('Flying', 'Grass', 2.0), ('Flying', 'Electric', 0.5), ('Flying', 'Fighting', 2.0), ('Flying', 'Bug', 2.0), ('Flying', 'Rock', 0.5), ('Flying', 'Steel', 0.5),
--- PSYCHIC
-('Psychic', 'Fighting', 2.0), ('Psychic', 'Poison', 2.0), ('Psychic', 'Psychic', 0.5), ('Psychic', 'Dark', 0.0), ('Psychic', 'Steel', 0.5),
--- BUG
-('Bug', 'Fire', 0.5), ('Bug', 'Grass', 2.0), ('Bug', 'Fighting', 0.5), ('Bug', 'Poison', 0.5), ('Bug', 'Flying', 0.5), ('Bug', 'Psychic', 2.0), ('Bug', 'Ghost', 0.5), ('Bug', 'Dark', 2.0), ('Bug', 'Steel', 0.5), ('Bug', 'Fairy', 0.5),
--- ROCK
-('Rock', 'Fire', 2.0), ('Rock', 'Ice', 2.0), ('Rock', 'Fighting', 0.5), ('Rock', 'Ground', 0.5), ('Rock', 'Flying', 2.0), ('Rock', 'Bug', 2.0), ('Rock', 'Steel', 0.5),
--- GHOST
-('Ghost', 'Normal', 0.0), ('Ghost', 'Psychic', 2.0), ('Ghost', 'Ghost', 2.0), ('Ghost', 'Dark', 0.5),
--- DRAGON
-('Dragon', 'Dragon', 2.0), ('Dragon', 'Steel', 0.5), ('Dragon', 'Fairy', 0.0),
--- DARK
-('Dark', 'Fighting', 0.5), ('Dark', 'Psychic', 2.0), ('Dark', 'Ghost', 2.0), ('Dark', 'Dark', 0.5), ('Dark', 'Fairy', 0.5),
--- STEEL
-('Steel', 'Fire', 0.5), ('Steel', 'Water', 0.5), ('Steel', 'Electric', 0.5), ('Steel', 'Ice', 2.0), ('Steel', 'Rock', 2.0), ('Steel', 'Steel', 0.5), ('Steel', 'Fairy', 2.0),
--- FAIRY
-('Fairy', 'Fire', 0.5), ('Fairy', 'Fighting', 2.0), ('Fairy', 'Poison', 0.5), ('Fairy', 'Dragon', 2.0), ('Fairy', 'Dark', 2.0), ('Fairy', 'Steel', 0.5)
-ON CONFLICT (attacking_type, defending_type) DO UPDATE SET multiplier = EXCLUDED.multiplier;
-
--- relations:
+-- Pokemon relations
 ALTER TABLE public.pokemon 
-    ADD CONSTRAINT fk_pokemon_generation FOREIGN KEY (generation_id) REFERENCES public.generation(id);
+    ADD CONSTRAINT fk_pokemon_generation FOREIGN KEY (generation_id) REFERENCES public.generation(id),
+    ADD CONSTRAINT fk_pokemon_creator FOREIGN KEY (created_by) REFERENCES public.users(user_id) ON DELETE SET NULL;
 
+-- Move relations
 ALTER TABLE public.move 
     ADD CONSTRAINT fk_move_generation FOREIGN KEY (generation_id) REFERENCES public.generation(id),
     ADD CONSTRAINT move_name_unique UNIQUE (name);
 
+-- Pokemon_moves relations
 ALTER TABLE public.pokemon_moves 
-    ADD CONSTRAINT fk_pm_pokemon FOREIGN KEY (pokemon_id) REFERENCES public.pokemon(id),
-    ADD CONSTRAINT fk_pm_move FOREIGN KEY (move_id) REFERENCES public.move(id);
+    ADD CONSTRAINT fk_pm_pokemon FOREIGN KEY (pokemon_id) REFERENCES public.pokemon(id) ON DELETE CASCADE,
+    ADD CONSTRAINT fk_pm_move FOREIGN KEY (move_id) REFERENCES public.move(id) ON DELETE CASCADE;
 
+-- Evolution relations
 ALTER TABLE public.evolution 
-    ADD CONSTRAINT fk_evo_pre FOREIGN KEY (pre_evolution_id) REFERENCES public.pokemon(id),
-    ADD CONSTRAINT fk_evo_post FOREIGN KEY (post_evolution_id) REFERENCES public.pokemon(id);
+    ADD CONSTRAINT fk_evo_pre FOREIGN KEY (pre_evolution_id) REFERENCES public.pokemon(id) ON DELETE CASCADE,
+    ADD CONSTRAINT fk_evo_post FOREIGN KEY (post_evolution_id) REFERENCES public.pokemon(id) ON DELETE CASCADE;
+
+-- 4. WIDOKI (VIEWS) - Wymagane do Raportów
+
+-- Widok 1: Średnie statystyki dla każdego typu
+CREATE OR REPLACE VIEW public.v_type_statistics AS
+WITH all_types AS (
+    -- 1. Pobieramy statystyki dla GŁÓWNEGO typu
+    SELECT pokemon_type as type, hp, attack, speed 
+    FROM public.pokemon
+    
+    UNION ALL
+    
+    -- 2. Doklejamy statystyki dla DRUGIEGO typu (jeśli istnieje)
+    SELECT secondary_type as type, hp, attack, speed 
+    FROM public.pokemon 
+    WHERE secondary_type IS NOT NULL
+)
+SELECT 
+    type as pokemon_type,
+    COUNT(*) as count,
+    ROUND(AVG(hp), 1) as avg_hp,
+    ROUND(AVG(attack), 1) as avg_attack,
+    ROUND(AVG(speed), 1) as avg_speed
+FROM all_types
+GROUP BY type
+ORDER BY avg_attack DESC;
+
+-- Widok 2: Liczba Pokemonów w każdej generacji
+CREATE OR REPLACE VIEW public.v_generation_counts AS
+SELECT 
+    g.name as generation_name,
+    COUNT(p.id) as pokemon_count
+FROM public.generation g
+LEFT JOIN public.pokemon p ON p.generation_id = g.id
+GROUP BY g.name
+ORDER BY g.name;
+
+-- Widok 3: Najpopularniejsze ataki (Top 10)
+CREATE OR REPLACE VIEW public.v_top_moves AS
+SELECT 
+    m.name,
+    m.move_type,
+    m.power,
+    COUNT(pm.pokemon_id) as learned_by_count
+FROM public.move m
+JOIN public.pokemon_moves pm ON m.id = pm.move_id
+GROUP BY m.id, m.name, m.move_type, m.power
+ORDER BY learned_by_count DESC
+LIMIT 10;
 
 
--- INSERTS
+-- Generation
 INSERT INTO public.generation (name) VALUES ('I');
 
--- gen I starters
--- DODANO KOLUMNĘ secondary_type DO LISTY INSERT
+-- Type Effectiveness Data
+INSERT INTO public.type_effectiveness (attacking_type, defending_type, multiplier) VALUES
+('Normal', 'Rock', 0.5), ('Normal', 'Ghost', 0.0), ('Normal', 'Steel', 0.5),
+('Fire', 'Fire', 0.5), ('Fire', 'Water', 0.5), ('Fire', 'Grass', 2.0), ('Fire', 'Ice', 2.0), ('Fire', 'Bug', 2.0), ('Fire', 'Rock', 0.5), ('Fire', 'Dragon', 0.5), ('Fire', 'Steel', 2.0),
+('Water', 'Fire', 2.0), ('Water', 'Water', 0.5), ('Water', 'Grass', 0.5), ('Water', 'Ground', 2.0), ('Water', 'Rock', 2.0), ('Water', 'Dragon', 0.5),
+('Grass', 'Fire', 0.5), ('Grass', 'Water', 2.0), ('Grass', 'Grass', 0.5), ('Grass', 'Poison', 0.5), ('Grass', 'Ground', 2.0), ('Grass', 'Flying', 0.5), ('Grass', 'Bug', 0.5), ('Grass', 'Rock', 2.0), ('Grass', 'Dragon', 0.5), ('Grass', 'Steel', 0.5),
+('Electric', 'Water', 2.0), ('Electric', 'Grass', 0.5), ('Electric', 'Electric', 0.5), ('Electric', 'Ground', 0.0), ('Electric', 'Flying', 2.0), ('Electric', 'Dragon', 0.5),
+('Ice', 'Fire', 0.5), ('Ice', 'Water', 0.5), ('Ice', 'Grass', 2.0), ('Ice', 'Ice', 0.5), ('Ice', 'Ground', 2.0), ('Ice', 'Flying', 2.0), ('Ice', 'Dragon', 2.0), ('Ice', 'Steel', 0.5),
+('Fighting', 'Normal', 2.0), ('Fighting', 'Ice', 2.0), ('Fighting', 'Poison', 0.5), ('Fighting', 'Flying', 0.5), ('Fighting', 'Psychic', 0.5), ('Fighting', 'Bug', 0.5), ('Fighting', 'Rock', 2.0), ('Fighting', 'Ghost', 0.0), ('Fighting', 'Dark', 2.0), ('Fighting', 'Steel', 2.0), ('Fighting', 'Fairy', 0.5),
+('Poison', 'Grass', 2.0), ('Poison', 'Poison', 0.5), ('Poison', 'Ground', 0.5), ('Poison', 'Rock', 0.5), ('Poison', 'Ghost', 0.5), ('Poison', 'Steel', 0.0), ('Poison', 'Fairy', 2.0),
+('Ground', 'Fire', 2.0), ('Ground', 'Grass', 0.5), ('Ground', 'Electric', 2.0), ('Ground', 'Poison', 2.0), ('Ground', 'Flying', 0.0), ('Ground', 'Bug', 0.5), ('Ground', 'Rock', 2.0), ('Ground', 'Steel', 2.0),
+('Flying', 'Grass', 2.0), ('Flying', 'Electric', 0.5), ('Flying', 'Fighting', 2.0), ('Flying', 'Bug', 2.0), ('Flying', 'Rock', 0.5), ('Flying', 'Steel', 0.5),
+('Psychic', 'Fighting', 2.0), ('Psychic', 'Poison', 2.0), ('Psychic', 'Psychic', 0.5), ('Psychic', 'Dark', 0.0), ('Psychic', 'Steel', 0.5),
+('Bug', 'Fire', 0.5), ('Bug', 'Grass', 2.0), ('Bug', 'Fighting', 0.5), ('Bug', 'Poison', 0.5), ('Bug', 'Flying', 0.5), ('Bug', 'Psychic', 2.0), ('Bug', 'Ghost', 0.5), ('Bug', 'Dark', 2.0), ('Bug', 'Steel', 0.5), ('Bug', 'Fairy', 0.5),
+('Rock', 'Fire', 2.0), ('Rock', 'Ice', 2.0), ('Rock', 'Fighting', 0.5), ('Rock', 'Ground', 0.5), ('Rock', 'Flying', 2.0), ('Rock', 'Bug', 2.0), ('Rock', 'Steel', 0.5),
+('Ghost', 'Normal', 0.0), ('Ghost', 'Psychic', 2.0), ('Ghost', 'Ghost', 2.0), ('Ghost', 'Dark', 0.5),
+('Dragon', 'Dragon', 2.0), ('Dragon', 'Steel', 0.5), ('Dragon', 'Fairy', 0.0),
+('Dark', 'Fighting', 0.5), ('Dark', 'Psychic', 2.0), ('Dark', 'Ghost', 2.0), ('Dark', 'Dark', 0.5), ('Dark', 'Fairy', 0.5),
+('Steel', 'Fire', 0.5), ('Steel', 'Water', 0.5), ('Steel', 'Electric', 0.5), ('Steel', 'Ice', 2.0), ('Steel', 'Rock', 2.0), ('Steel', 'Steel', 0.5), ('Steel', 'Fairy', 2.0),
+('Fairy', 'Fire', 0.5), ('Fairy', 'Fighting', 2.0), ('Fairy', 'Poison', 0.5), ('Fairy', 'Dragon', 2.0), ('Fairy', 'Dark', 2.0), ('Fairy', 'Steel', 0.5)
+ON CONFLICT (attacking_type, defending_type) DO UPDATE SET multiplier = EXCLUDED.multiplier;
+
+-- Pokemons (created_by domyślnie NULL dla starterów)
 INSERT INTO public.pokemon (
     pokedex_number, name, image_url, pokemon_type, secondary_type, height, weight, 
     description, hp, attack, defense, sp_attack, sp_defense, speed, generation_id
@@ -173,8 +211,7 @@ INSERT INTO public.pokemon (
 (8, 'Wartortle', 'https://archives.bulbagarden.net/media/upload/thumb/0/0f/0008Wartortle.png/500px-0008Wartortle.png', 'Water', NULL, 1.0, 22.5, 'Often hides in water to stalk unwary prey. For swimming fast, it moves its ears to maintain balance.', 59, 63, 80, 65, 80, 58, 1),
 (9, 'Blastoise', 'https://archives.bulbagarden.net/media/upload/thumb/0/0a/0009Blastoise.png/500px-0009Blastoise.png', 'Water', NULL, 1.6, 85.5, 'A brutal Pokémon with pressurized water jets on its shell. They are used for high speed tackles.', 79, 83, 100, 85, 105, 78, 1);
 
--- moves
--- ZAKTUALIZOWANO INSERT O OPISY (pole description)
+-- Moves
 INSERT INTO public.move (name, move_type, category, pp, power, accuracy, description, generation_id) VALUES 
 ('Pound', 'Normal', 'Physical', 35, 40, 1.00, 'Pounds with forelegs or tail.', 1),
 ('Karate Chop', 'Fighting', 'Physical', 25, 50, 1.00, 'High critical hit ratio.', 1),
@@ -217,31 +254,20 @@ INSERT INTO public.move (name, move_type, category, pp, power, accuracy, descrip
 ('Solar Beam', 'Grass', 'Special', 10, 120, 1.00, 'Charges on first turn, attacks on second.', 1)
 ON CONFLICT (name) DO NOTHING;
 
---inserty ataków dla pokemonów
+-- Moves to Pokemon assignments (Bulbasaur)
 INSERT INTO public.pokemon_moves (pokemon_id, move_id)
 SELECT p.id, m.id
 FROM public.pokemon p
 CROSS JOIN public.move m
 WHERE p.name = 'Bulbasaur' 
 AND m.name IN (
-    'Tackle',
-    'Growl',
-    'Vine Whip',
-    'Growth',
-    'Leech Seed',
-    'Razor Leaf',
-    'Poison Powder',
-    'Sleep Powder',
-    'Seed Bomb',
-    'Take Down',
-    'Sweet Scent',
-    'Synthesis',
-    'Worry Seed',
-    'Power Whip',
-    'Solar Beam'
+    'Tackle', 'Growl', 'Vine Whip', 'Growth', 'Leech Seed', 'Razor Leaf',
+    'Poison Powder', 'Sleep Powder', 'Seed Bomb', 'Take Down', 'Sweet Scent',
+    'Synthesis', 'Worry Seed', 'Power Whip', 'Solar Beam'
 )
 ON CONFLICT (pokemon_id, move_id) DO NOTHING;
 
+-- Evolutions
 INSERT INTO public.evolution (pre_evolution_id, post_evolution_id, trigger_type, min_level, item, notes) VALUES 
 (1, 2, 'Level', 16, NULL, NULL),
 (2, 3, 'Level', 32, NULL, NULL),

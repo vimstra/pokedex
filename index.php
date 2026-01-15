@@ -1,4 +1,8 @@
 <?php
+
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 session_start();
 $registerError = null;
 $loginError = null;
@@ -141,7 +145,7 @@ try {
         .menu-sticky-wrapper { position: sticky; top: 0; z-index: 100; background: #f8f9fa; width: 100%; padding: 60px 20px 20px 20px; border-bottom: 1px solid #e0e0e0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
         .menu-bar { display: flex; justify-content: space-between; align-items: center; max-width: 900px; margin: 0 auto; flex-wrap: wrap; gap: 20px; }
         .menu-group { display: flex; gap: 15px; align-items: center; }
-        .menu-btn { padding: 10px 25px; border: 2px solid #DC0A2D; background: white; color: #DC0A2D; font-weight: 700; font-size: 0.9rem; cursor: pointer; border-radius: 50px; transition: all 0.2s ease; text-transform: uppercase; }
+        .menu-btn { padding: 10px 20px; border: 2px solid #DC0A2D; background: white; color: #DC0A2D; font-weight: 700; font-size: 0.8rem; cursor: pointer; border-radius: 50px; transition: all 0.2s ease; text-transform: uppercase; }
         .menu-btn:hover, .menu-btn.active { background-color: #DC0A2D; color: white; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(220, 10, 45, 0.3); }
         
         .user-tag { color: #333; font-weight: 800; text-transform: uppercase; font-size: 0.8rem; background: #eee; padding: 5px 12px; border-radius: 10px; border: 1px solid #ddd; }
@@ -207,6 +211,7 @@ try {
                     <button class="menu-btn active" data-target="pokemons">Pokemons</button>
                     <button class="menu-btn" data-target="moves">Moves</button>
                     <button class="menu-btn" data-target="type-chart">Type Chart</button>
+                    <a href="reports.php" class="menu-btn" style="text-decoration: none;">Stats</a>
                     <?php if (isset($_SESSION['user'])) :?>  
                     <button class="menu-btn" data-target="my-party">My Party</button>
                     <?php endif; ?>
