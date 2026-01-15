@@ -22,7 +22,15 @@ try {
     $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
     // 2. Pobranie danych Ataku
-    $stmt = $pdo->prepare("SELECT *, move_type::text as type, category::text as cat FROM public.move WHERE id = ?");
+    $sql = "SELECT m.*, 
+                   m.move_type::text as type, 
+                   m.category::text as cat,
+                   g.name as gen_name
+            FROM public.move m
+            LEFT JOIN public.generation g ON m.generation_id = g.id
+            WHERE m.id = ?";
+            
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([$id]);
     $move = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -149,6 +157,12 @@ try {
         <!-- Javascript history back dla wygody, lub link do index.php -->
         <a href="javascript:history.back()" class="back-btn">&larr; Go Back</a>
         <span style="font-weight: 800; font-size: 1.2rem;"><?= htmlspecialchars($move['name']) ?></span>
+        <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'Admin'): ?>
+        <div style="margin-left: auto; display: flex; gap: 10px;">
+            <a href="edit_move.php?id=<?= $move['id'] ?>" class="back-btn" style="background: #2196F3;">Edit</a>
+            <a href="delete_entry.php?type=move&id=<?= $move['id'] ?>" class="back-btn" style="background: #f44336;" onclick="return confirm('Are you sure you want to delete this Move?');">Delete</a>
+        </div>
+    <?php endif; ?>
     </div>
 
     <div class="container">
@@ -163,6 +177,7 @@ try {
                 <div class="move-desc">
                     <?= !empty($move['description']) ? htmlspecialchars($move['description']) : 'No description available.' ?>
                 </div>
+                <div><strong>Gen:</strong> <?= htmlspecialchars($move['gen_name']) ?></div>
             </div>
 
             <div class="stats-grid">

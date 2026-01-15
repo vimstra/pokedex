@@ -41,6 +41,7 @@ try {
         if ($userData && password_verify($pass, $userData['password'])) {
             $_SESSION['user'] = $userData['username'];
             $_SESSION['role'] = $userData['role'];
+            $_SESSION['user_id'] = $userData['user_id'];
             header("Location: index.php");
             exit;
         } else {
@@ -67,6 +68,7 @@ try {
                 
                 $_SESSION['user'] = $username;
                 $_SESSION['role'] = $role;
+                $_SESSION['user_id'] = $pdo->lastInsertId(); // Opcjonalnie: automatyczne logowanie po rejestracji (dla user_id)
                 header("Location: index.php");
                 exit;
             }
@@ -86,12 +88,25 @@ try {
     $stmtPkmn = $pdo->query("SELECT *, pokemon_type::text as type_1, secondary_type::text as type_2 FROM public.pokemon ORDER BY pokedex_number ASC");
     $pokemons = $stmtPkmn->fetchAll(PDO::FETCH_ASSOC);
 
+    // USUNIĘTO BŁĘDNY KOD Z $id TUTAJ
+
     $stmtMoves = $pdo->query("SELECT id, name, LOWER(move_type::text) as type, LOWER(category::text) as category, power, accuracy, pp FROM public.move");
     $movesFromDb = $stmtMoves->fetchAll(PDO::FETCH_ASSOC);
 
+    // POBIERANIE MY PARTY (Przeniesione tutaj, żeby było bezpieczne)
+    $myPartyIds = [];
+    if (isset($_SESSION['user_id'])) {
+        try {
+            $stmtParty = $pdo->prepare("SELECT pokemon_id FROM public.user_party WHERE user_id = ?");
+            $stmtParty->execute([$_SESSION['user_id']]);
+            // Pobieramy jako prostą tablicę liczb (FETCH_COLUMN), a nie tablicę tablic
+            $myPartyIds = $stmtParty->fetchAll(PDO::FETCH_COLUMN);
+        } catch (PDOException $e) {
+            // Ignorujemy błąd jeśli tabela jeszcze nie istnieje
+        }
+    }
+
     // POBIERANIE DANYCH DO TYPE CHART (EFEKTYWNOŚĆ)
-    // UWAGA: Wymaga utworzenia tabeli type_effectiveness (z kodu SQL podanego w poprzedniej odpowiedzi)
-    // Jeśli tabela nie istnieje, ten kod zadziała (try-catch), ale kalkulator będzie zwracał 1x.
     $typeChart = [];
     try {
         $stmtEff = $pdo->query("SELECT attacking_type::text as atk, defending_type::text as def, multiplier FROM public.type_effectiveness");
@@ -100,7 +115,7 @@ try {
             $typeChart[$row['atk']][$row['def']] = (float)$row['multiplier'];
         }
     } catch (PDOException $e) {
-        // Tabela może nie istnieć
+        // Ignorujemy brak tabeli effectiveness
     }
 
 } catch (PDOException $e) {
@@ -210,25 +225,38 @@ try {
         </div>
 
         <div class="content-wrapper">
-            <!-- POKEMONS TAB -->
-            <div id="pokemons" class="content-display visible">
-                <h2 class="content-header" style="text-align: center; border: none; display: block;">Search & Filter</h2>
-                <div class="form-group" style="max-width: 600px; margin: 0 auto 20px auto;">
-                    <input type="text" id="poke-search" placeholder="Search Pokemon by name..." oninput="updatePokeSearch(this.value)">
-                </div>
-                <div class="types-grid" id="poke-types-container">
-                    <?php 
-                    $types = ['fire','water','grass','electric','normal','ice','flying','poison','fighting','dragon','fairy','bug','psychic','dark','ghost','ground','rock','steel'];
-                    foreach($types as $t): ?>
-                        <button class="type-btn type-<?= $t ?>" onclick="togglePokeType('<?= $t ?>', this)"><?= ucfirst($t) ?></button>
-                    <?php endforeach; ?>
-                </div>
-                <button class="reset-btn" onclick="resetPokeFilters()">Reset Filters</button>
-                <div id="poke-grid-container" class="poke-grid"></div>
+    <!-- POKEMONS TAB -->
+    <div id="pokemons" class="content-display visible">        
+        <!-- POPRAWIONY FRAGMENT -->
+        <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'Admin'): ?>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <a href="add_pokemon.php" class="reset-btn" style="background-color: #28a745; text-decoration: none; display: inline-block;">+ Add Pokemon</a>
             </div>
+        <?php endif; ?>
+<h2 class="content-header" style="text-align: center; border: none; display: block;">Search & Filter</h2>
+        <div class="form-group" style="max-width: 600px; margin: 0 auto 20px auto;">
+            <input type="text" id="poke-search" placeholder="Search Pokemon by name..." oninput="updatePokeSearch(this.value)">
+        </div>
+        
+        <div class="types-grid" id="poke-types-container">
+            <?php 
+            $types = ['fire','water','grass','electric','normal','ice','flying','poison','fighting','dragon','fairy','bug','psychic','dark','ghost','ground','rock','steel'];
+            foreach($types as $t): ?>
+                <button class="type-btn type-<?= $t ?>" onclick="togglePokeType('<?= $t ?>', this)"><?= ucfirst($t) ?></button>
+            <?php endforeach; ?>
+        </div>
+        
+        <button class="reset-btn" onclick="resetPokeFilters()">Reset Filters</button>
+        <div id="poke-grid-container" class="poke-grid"></div>
+    </div>
 
             <!-- MOVES TAB -->
             <div id="moves" class="content-display">
+                <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'Admin'): ?>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <a href="add_move.php" class="reset-btn" style="background-color: #28a745; text-decoration: none; display: inline-block;">+ Add Move</a>
+            </div>
+        <?php endif; ?>
                 <h2 class="content-header" style="text-align: center; border: none; display: block;">Filter by Type</h2>
                 <div class="types-grid">
                     <?php foreach($types as $t): ?>
@@ -250,12 +278,11 @@ try {
                 </div>
             </div>
 
-            <!-- TYPE CHART TAB (POPRAWIONA) -->
+            <!-- TYPE CHART TAB -->
             <div id="type-chart" class="content-display">
                 <h2 class="content-header" style="text-align: center; border: none; display: block;">Move type (Attacker):</h2>
                 <div class="types-grid" id="chart-attacker-container">
                     <?php foreach($types as $t): ?>
-                        <!-- Zmieniono onclick na dedykowaną funkcję dla Chart -->
                         <button class="type-btn type-<?= $t ?>" onclick="selectChartAttacker('<?= $t ?>', this)"><?= ucfirst($t) ?></button>
                     <?php endforeach; ?>
                 </div>
@@ -263,12 +290,10 @@ try {
                 <h2 class="content-header" style="text-align: center; border: none; display: block;">Pokemon type (Defender):</h2>
                 <div class="types-grid" id="chart-defender-container">
                     <?php foreach($types as $t): ?>
-                        <!-- Zmieniono onclick na dedykowaną funkcję dla Chart -->
                         <button class="type-btn type-<?= $t ?>" onclick="toggleChartDefender('<?= $t ?>', this)"><?= ucfirst($t) ?></button>
                     <?php endforeach; ?>
                 </div>
 
-                <!-- Wynik Kalkulacji -->
                 <div id="chart-result-container" style="text-align: center; margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 10px; border: 2px solid #eee;">
                     <div style="font-size: 0.9rem; text-transform: uppercase; color: #888; font-weight: 700;">Efficiency</div>
                     <div id="chart-value" style="font-size: 3rem; font-weight: 800; color: #333;">-</div>
@@ -278,8 +303,8 @@ try {
 
             <!-- MY PARTY TAB -->
             <div id="my-party" class="content-display">
-                <h2 class="content-header">My Party</h2>
-                <p>Comming soon...</p>
+                <h2 class="content-header" style="text-align: center; display: block;">My Party</h2>
+                <div id="party-grid-container" class="poke-grid"></div>
             </div>
 
             <!-- LOGIN -->
@@ -351,13 +376,13 @@ try {
             button.addEventListener('click', () => {
                 if (button.tagName === 'A') return;
                 const targetId = button.getAttribute('data-target');
+                if (targetId === 'my-party') {
+                    renderMyParty();
+                }
                 switchTab(targetId);
             });
         });
 
-        /* =========================================
-           LOGIKA POKEMONÓW
-           ========================================= */
         const allPokemons = <?php echo json_encode($pokemons); ?>;
         
         let pokeState = {
@@ -504,20 +529,14 @@ try {
         }
 
         /* =========================================
-           LOGIKA TYPE CHART (KALKULATOR)
+           LOGIKA TYPE CHART
            ========================================= */
-        // Dane pobrane z PHP
         const chartData = <?php echo json_encode($typeChart); ?>;
-        
-        let chartState = {
-            attacker: null,
-            defenders: [] // Max 2
-        };
+        let chartState = { attacker: null, defenders: [] };
 
         function selectChartAttacker(type, btnElement) {
-            // Tylko jeden atakujący
             if (chartState.attacker === type) {
-                chartState.attacker = null; // Odznaczenie
+                chartState.attacker = null;
             } else {
                 chartState.attacker = type;
             }
@@ -538,14 +557,11 @@ try {
         }
 
         function updateChartUI() {
-            // Aktualizacja przycisków Attacker
             document.querySelectorAll('#chart-attacker-container .type-btn').forEach(btn => {
                 const typeName = Array.from(btn.classList).find(c => c.startsWith('type-') && c !== 'type-btn').replace('type-', '');
                 if (chartState.attacker === typeName) btn.classList.add('active');
                 else btn.classList.remove('active');
             });
-
-            // Aktualizacja przycisków Defender
             document.querySelectorAll('#chart-defender-container .type-btn').forEach(btn => {
                 const typeName = Array.from(btn.classList).find(c => c.startsWith('type-') && c !== 'type-btn').replace('type-', '');
                 if (chartState.defenders.includes(typeName)) btn.classList.add('active');
@@ -556,54 +572,57 @@ try {
         function calculateChart() {
             const valDiv = document.getElementById('chart-value');
             const descDiv = document.getElementById('chart-desc');
-
             if (!chartState.attacker || chartState.defenders.length === 0) {
                 valDiv.innerText = '-';
                 descDiv.innerText = 'Select Attacker & Defender';
                 valDiv.style.color = '#333';
                 return;
             }
-
-            // Normalizacja nazw (W bazie są Capitalized 'Fire', w JS class lowercase 'fire')
-            // PHP zwraca Capitalized, w chartState trzymamy to co w klasach CSS czyli lowercase
-            // Musimy to ujednolicić. Najlepiej zamienić pierwszą literę na dużą dla klucza bazy.
             const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-
             const atk = capitalize(chartState.attacker);
             let multiplier = 1.0;
-
             chartState.defenders.forEach(defLower => {
                 const def = capitalize(defLower);
-                
-                // Pobierz wartość z chartData. Jeśli nie ma klucza, przyjmij 1.0
                 let val = 1.0;
                 if (chartData[atk] && chartData[atk][def] !== undefined) {
                     val = chartData[atk][def];
                 }
                 multiplier *= val;
             });
-
-            // Wyświetlanie
             valDiv.innerText = multiplier + 'x';
-            
-            if (multiplier === 0) {
-                valDiv.style.color = '#333';
-                descDiv.innerText = 'No Effect!';
-            } else if (multiplier < 1) {
-                valDiv.style.color = '#a04040';
-                descDiv.innerText = 'Not very effective...';
-            } else if (multiplier === 1) {
-                valDiv.style.color = '#333';
-                descDiv.innerText = 'Normal damage';
-            } else if (multiplier > 1) {
-                valDiv.style.color = '#4caf50';
-                descDiv.innerText = 'Super Effective!';
-            }
-            if (multiplier >= 4) {
-                valDiv.style.color = '#DC0A2D';
-                descDiv.innerText = 'Ultra Effective!';
-            }
+            if (multiplier === 0) { valDiv.style.color = '#333'; descDiv.innerText = 'No Effect!'; }
+            else if (multiplier < 1) { valDiv.style.color = '#a04040'; descDiv.innerText = 'Not very effective...'; }
+            else if (multiplier === 1) { valDiv.style.color = '#333'; descDiv.innerText = 'Normal damage'; }
+            else if (multiplier > 1) { valDiv.style.color = '#4caf50'; descDiv.innerText = 'Super Effective!'; }
+            if (multiplier >= 4) { valDiv.style.color = '#DC0A2D'; descDiv.innerText = 'Ultra Effective!'; }
         }
+
+        const partyIds = <?php echo json_encode($myPartyIds ?? []); ?>;
+        const partyContainer = document.getElementById('party-grid-container');
+
+        function renderMyParty() {
+            const partyPokemons = allPokemons.filter(p => partyIds.includes(p.id));
+
+            if (partyPokemons.length === 0) {
+                partyContainer.innerHTML = '<p style="text-align:center; color:#999; grid-column:1/-1;">Your party is empty. Add pokemons from their cards!</p>';
+                return;
+            }
+
+            partyContainer.innerHTML = partyPokemons.map(p => `
+                <a href="pokemon_card.php?id=${p.id}" class="poke-tile" style="text-decoration: none; color: inherit;">
+                    <div class="tile-content">
+                        <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" class="poke-img">
+                        <span class="poke-name">${escapeHtml(p.name)}</span>
+                    </div>
+                    <span class="poke-index">#${String(p.pokedex_number).padStart(3, '0')}</span>
+                    <div style="margin-bottom:10px; display:flex; gap:5px; justify-content:center;">
+                         <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.pokemon_type.toLowerCase()}">${p.pokemon_type}</span>
+                         ${p.secondary_type ? `<span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.secondary_type.toLowerCase()}">${p.secondary_type}</span>` : ''}
+                    </div>
+                </a>
+            `).join('');
+        }
+
     </script>
 </body>
 </html>

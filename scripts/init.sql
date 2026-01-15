@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS public.evolution (
     trigger_type public.element_type NOT NULL,
     min_level INT4,
     item TEXT,
-    notes JSON,
+    notes TEXT,
     PRIMARY KEY (pre_evolution_id, post_evolution_id)
 );
 
@@ -80,13 +80,21 @@ CREATE TABLE IF NOT EXISTS public.users (
 );
 
 -- type effectivness table
-
--- TABELA EFEKTYWNOŚCI
 CREATE TABLE IF NOT EXISTS public.type_effectiveness (
     attacking_type public.element_type NOT NULL,
     defending_type public.element_type NOT NULL,
     multiplier NUMERIC(3, 1) NOT NULL DEFAULT 1.0,
     PRIMARY KEY (attacking_type, defending_type)
+);
+
+--favourites table
+CREATE TABLE IF NOT EXISTS public.user_party (
+    user_id INT4 NOT NULL,
+    pokemon_id INT4 NOT NULL,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, pokemon_id),
+    CONSTRAINT fk_party_user FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_party_pokemon FOREIGN KEY (pokemon_id) REFERENCES public.pokemon(id) ON DELETE CASCADE
 );
 
 
