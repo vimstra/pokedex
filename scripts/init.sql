@@ -1,4 +1,4 @@
--- 1. KONFIGURACJA TYPÓW (ENUMS)
+-- typy
 DO $$ BEGIN
     CREATE TYPE public.element_type AS ENUM (
         'Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Ice', 
@@ -13,9 +13,11 @@ DO $$ BEGIN
     CREATE TYPE public.user_role AS ENUM ('Admin', 'Common');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
--- 2. TWORZENIE TABEL
+-- tworzenie tabel 
 
--- Users
+-- użytkownicy (pierwszych dwoch uzytkownikow "admin" i "common" dodajemy w pliku index.php bo cos przez baze mi hashowanie haseł nie działało)
+-- hasła sa hashowane
+-- dwie role: common i admin
 CREATE TABLE IF NOT EXISTS public.users (
     user_id SMALLSERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
@@ -23,13 +25,14 @@ CREATE TABLE IF NOT EXISTS public.users (
     role public.user_role NOT NULL DEFAULT 'Common'
 );
 
--- Generation
+-- generacje
 CREATE TABLE IF NOT EXISTS public.generation (
     id SMALLSERIAL PRIMARY KEY,
     name TEXT NOT NULL
 );
 
--- Pokemon (Z WALIDACJĄ DANYCH - Wymóg 6b)
+-- pokemony
+-- walidajca danych, wymóg 6b
 CREATE TABLE IF NOT EXISTS public.pokemon (
     id SMALLSERIAL PRIMARY KEY,
     pokedex_number INT2 NOT NULL,
@@ -40,18 +43,18 @@ CREATE TABLE IF NOT EXISTS public.pokemon (
     height NUMERIC(5, 2) NOT NULL CONSTRAINT check_height_pos CHECK (height > 0),
     weight NUMERIC(5, 1) NOT NULL CONSTRAINT check_weight_pos CHECK (weight > 0),
     description TEXT NOT NULL,
-    -- Walidacja statystyk (muszą być dodatnie)
-    hp INT2 NOT NULL CONSTRAINT check_hp_pos CHECK (hp > 0),
-    attack INT2 NOT NULL CONSTRAINT check_atk_pos CHECK (attack > 0),
-    defense INT2 NOT NULL CONSTRAINT check_def_pos CHECK (defense > 0),
-    sp_attack INT2 NOT NULL CONSTRAINT check_spa_pos CHECK (sp_attack > 0),
-    sp_defense INT2 NOT NULL CONSTRAINT check_spd_pos CHECK (sp_defense > 0),
-    speed INT2 NOT NULL CONSTRAINT check_spe_pos CHECK (speed > 0),
+    -- walidacja muszą być nieujemne)
+    hp INT2 NOT NULL CONSTRAINT check_hp_pos CHECK (hp >= 0),
+    attack INT2 NOT NULL CONSTRAINT check_atk_pos CHECK (attack >= 0),
+    defense INT2 NOT NULL CONSTRAINT check_def_pos CHECK (defense >= 0),
+    sp_attack INT2 NOT NULL CONSTRAINT check_spa_pos CHECK (sp_attack >= 0),
+    sp_defense INT2 NOT NULL CONSTRAINT check_spd_pos CHECK (sp_defense >= 0),
+    speed INT2 NOT NULL CONSTRAINT check_spe_pos CHECK (speed >= 0),
     generation_id INT2 NOT NULL,
-    created_by INT4
+    created_by INT4 -- może byciem nullem np dla pokemonow dodanych poprzez baze danych. wtedy w aplikacji wyswietla sie "added by : System"
 );
 
--- Move (Z WALIDACJĄ DANYCH - Wymóg 6b)
+-- ataki - tutaj tez jest walidacja danych (wymóŋ 6b)
 CREATE TABLE IF NOT EXISTS public.move (
     id SMALLSERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -59,20 +62,19 @@ CREATE TABLE IF NOT EXISTS public.move (
     category TEXT NOT NULL,
     pp INT2 NOT NULL CONSTRAINT check_pp_pos CHECK (pp > 0),
     power INT2,
-    -- Celność musi być między 0.00 a 1.00 (lub NULL dla pewnych ataków)
     accuracy NUMERIC(3, 2) CONSTRAINT check_acc_range CHECK (accuracy >= 0 AND accuracy <= 1),
     description TEXT,
     generation_id INT2 NOT NULL
 );
 
--- Pokemon_moves
+-- tablica asocjacyjna dla pokemonow i ich atakow
 CREATE TABLE IF NOT EXISTS public.pokemon_moves (
     pokemon_id INT4 NOT NULL,
     move_id INT4 NOT NULL,
     PRIMARY KEY (pokemon_id, move_id)
 );
 
--- Evolution
+-- ewolucje
 CREATE TABLE IF NOT EXISTS public.evolution (
     pre_evolution_id INT4 NOT NULL,
     post_evolution_id INT4 NOT NULL,
@@ -83,7 +85,7 @@ CREATE TABLE IF NOT EXISTS public.evolution (
     PRIMARY KEY (pre_evolution_id, post_evolution_id)
 );
 
--- Type effectiveness
+-- tablica dla efektywnoci typow
 CREATE TABLE IF NOT EXISTS public.type_effectiveness (
     attacking_type public.element_type NOT NULL,
     defending_type public.element_type NOT NULL,
@@ -91,27 +93,15 @@ CREATE TABLE IF NOT EXISTS public.type_effectiveness (
     PRIMARY KEY (attacking_type, defending_type)
 );
 
--- Favourites
+-- tablica do budowania My Party
 CREATE TABLE IF NOT EXISTS public.user_party (
     user_id INT4 NOT NULL,
     pokemon_id INT4 NOT NULL,
     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, pokemon_id),
-    CONSTRAINT fk_party_user FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE,
-    CONSTRAINT fk_party_pokemon FOREIGN KEY (pokemon_id) REFERENCES public.pokemon(id) ON DELETE CASCADE
+    PRIMARY KEY (user_id, pokemon_id)
 );
 
--- Sightings (Relacja 1-N, jeśli używasz)
-CREATE TABLE IF NOT EXISTS public.sightings (
-    id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL,
-    pokemon_id INT NOT NULL,
-    location_name TEXT NOT NULL,
-    sighted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- 3. TRIGGER (Wymóg 6c - Kontrola spójności)
--- Blokuje dodanie pokemona, który ma ten sam typ główny i wtórny (np. Fire/Fire)
+-- TRIGGERY - wymóg 6c - funkcje wbudowany i wyzwalacze, kontrola spójności danych, nlokada wprowadzenia niepoprawnych wartości danych
 CREATE OR REPLACE FUNCTION check_duplicate_types()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -127,8 +117,32 @@ BEFORE INSERT OR UPDATE ON public.pokemon
 FOR EACH ROW
 EXECUTE FUNCTION check_duplicate_types();
 
+CREATE OR REPLACE FUNCTION check_party_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+    party_count INTEGER;
+BEGIN
+    -- Policz ile pokemonów użytkownik ma już w party
+    SELECT COUNT(*) INTO party_count 
+    FROM public.user_party 
+    WHERE user_id = NEW.user_id;
 
--- 4. RELACJE (KLUCZE OBCE)
+    -- Jeśli ma już 6 lub więcej, zablokuj dodanie kolejnego
+    IF party_count >= 6 THEN
+        RAISE EXCEPTION 'Party is full! You can only have 6 Pokémon in your party.';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_check_party_limit
+BEFORE INSERT ON public.user_party
+FOR EACH ROW
+EXECUTE FUNCTION check_party_limit();
+
+
+-- klucze obce i relacje (wymóg 2b - wykorzystanie kluczy obcych)
 
 ALTER TABLE public.pokemon 
     ADD CONSTRAINT fk_pokemon_generation FOREIGN KEY (generation_id) REFERENCES public.generation(id),
@@ -146,12 +160,17 @@ ALTER TABLE public.evolution
     ADD CONSTRAINT fk_evo_pre FOREIGN KEY (pre_evolution_id) REFERENCES public.pokemon(id) ON DELETE CASCADE,
     ADD CONSTRAINT fk_evo_post FOREIGN KEY (post_evolution_id) REFERENCES public.pokemon(id) ON DELETE CASCADE;
 
-ALTER TABLE public.sightings
-    ADD CONSTRAINT fk_sighting_user FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE,
-    ADD CONSTRAINT fk_sighting_pokemon FOREIGN KEY (pokemon_id) REFERENCES public.pokemon(id) ON DELETE CASCADE;
+ALTER TABLE public.user_party
+    ADD CONSTRAINT fk_party_user FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE,
+    ADD CONSTRAINT fk_party_pokemon FOREIGN KEY (pokemon_id) REFERENCES public.pokemon(id) ON DELETE CASCADE;
 
--- 5. WIDOKI (Wymagane do Raportów + Wymóg 6a)
 
+
+-- WIDOKI - 2a
+-- FUNKCJE AGREGUJĄCE - 2c
+-- Rozszerzenie widoków - 6a
+
+-- Widok 1: Type Statistics
 CREATE OR REPLACE VIEW public.v_type_statistics AS
 WITH all_types AS (
     SELECT pokemon_type as type, hp, attack, speed FROM public.pokemon
@@ -168,6 +187,7 @@ FROM all_types
 GROUP BY type
 ORDER BY avg_attack DESC;
 
+-- Widok 2: Generation Count
 CREATE OR REPLACE VIEW public.v_generation_counts AS
 SELECT 
     g.name as generation_name,
@@ -177,6 +197,7 @@ LEFT JOIN public.pokemon p ON p.generation_id = g.id
 GROUP BY g.name
 ORDER BY g.name;
 
+-- Widok 3: Top Moves
 CREATE OR REPLACE VIEW public.v_top_moves AS
 SELECT 
     m.name,
@@ -189,34 +210,24 @@ GROUP BY m.id, m.name, m.move_type, m.power
 ORDER BY learned_by_count DESC
 LIMIT 10;
 
--- NOWY WIDOK Z HAVING (Wymóg 6a)
--- Grupuje pokemony po typie i sprawdza sumę statystyk (Total).
--- Wyświetla tylko te typy, których średni "Total Stat" jest większy niż 300.
+-- Widok 4: Strong Types (z klauzulą HAVING - Wymóg 6a - typy dla których average total statysyk jest większy niż 300)
 CREATE OR REPLACE VIEW public.v_strong_types AS
 SELECT 
     pokemon_type,
     COUNT(*) as pokemon_count,
-    -- Obliczamy średni TOTAL (suma wszystkich statystyk)
     ROUND(AVG(hp + attack + defense + sp_attack + sp_defense + speed), 1) as avg_total_stats
 FROM public.pokemon
 GROUP BY pokemon_type
--- Klauzula HAVING filtruje grupy PO obliczeniu średniej
 HAVING AVG(hp + attack + defense + sp_attack + sp_defense + speed) > 300
 ORDER BY avg_total_stats DESC;
 
 
--- 6. INSERTS
+-- INSERTY
 
--- Users
-INSERT INTO public.users (username, password, role) VALUES
-('admin', '$2y$10$fVfE1MvXpXf8O7.vBvIbe.5GfL5Z7kH3I9ZpD7E/N6pGv6F5A.k1S', 'Admin'::public.user_role),
-('common', '$2y$10$W1R.E.D3fG7kH9I2ZpD7E.N6pGv6F5A.k1SfVfE1MvXpXf8O7.vBv', 'Common'::public.user_role)
-ON CONFLICT (username) DO NOTHING;
+-- Generacje
+INSERT INTO public.generation (name) VALUES ('I','II','III','IV','V','VI','VII','VIII');
 
--- Generation
-INSERT INTO public.generation (name) VALUES ('I');
-
--- Type Effectiveness
+-- Efektywność ataków
 INSERT INTO public.type_effectiveness (attacking_type, defending_type, multiplier) VALUES
 ('Normal', 'Rock', 0.5), ('Normal', 'Ghost', 0.0), ('Normal', 'Steel', 0.5),
 ('Fire', 'Fire', 0.5), ('Fire', 'Water', 0.5), ('Fire', 'Grass', 2.0), ('Fire', 'Ice', 2.0), ('Fire', 'Bug', 2.0), ('Fire', 'Rock', 0.5), ('Fire', 'Dragon', 0.5), ('Fire', 'Steel', 2.0),
@@ -238,21 +249,20 @@ INSERT INTO public.type_effectiveness (attacking_type, defending_type, multiplie
 ('Fairy', 'Fire', 0.5), ('Fairy', 'Fighting', 2.0), ('Fairy', 'Poison', 0.5), ('Fairy', 'Dragon', 2.0), ('Fairy', 'Dark', 2.0), ('Fairy', 'Steel', 0.5)
 ON CONFLICT (attacking_type, defending_type) DO UPDATE SET multiplier = EXCLUDED.multiplier;
 
--- Pokemons
--- Uzupełniono created_by = 1 (Admin)
+-- Pokemons  - created_by jest null, dla pokemonów dodanych z bazy
 INSERT INTO public.pokemon (
     pokedex_number, name, image_url, pokemon_type, secondary_type, height, weight, 
-    description, hp, attack, defense, sp_attack, sp_defense, speed, generation_id, created_by
+    description, hp, attack, defense, sp_attack, sp_defense, speed, generation_id
 ) VALUES 
-(1, 'Bulbasaur', 'https://archives.bulbagarden.net/media/upload/thumb/f/fb/0001Bulbasaur.png/500px-0001Bulbasaur.png', 'Grass', 'Poison', 0.7, 6.9, 'A strange seed was planted on its back at birth.', 45, 49, 49, 65, 65, 45, 1, 1),
-(2, 'Ivysaur', 'https://archives.bulbagarden.net/media/upload/thumb/8/81/0002Ivysaur.png/500px-0002Ivysaur.png', 'Grass', 'Poison',1.0, 13.0, 'When the bulb on its back grows large, it appears to lose the ability to stand on its hind legs.', 60, 62, 63, 80, 80, 60, 1,null),
-(3, 'Venusaur', 'https://archives.bulbagarden.net/media/upload/thumb/6/6b/0003Venusaur.png/500px-0003Venusaur.png', 'Grass', 'Poison', 2.0, 100.0, 'Its plant blooms when it is absorbing solar energy. It stays on the move to seek sunlight.', 80, 82, 83, 100, 100, 80, 1, null),
-(4, 'Charmander', 'https://archives.bulbagarden.net/media/upload/thumb/2/27/0004Charmander.png/500px-0004Charmander.png', 'Fire', NULL, 0.6, 8.5, 'Obviously prefers hot places. When it rains, steam is said to spout from the tip of its tail.', 39, 52, 43, 60, 50, 65, 1, null),
-(5, 'Charmeleon', 'https://archives.bulbagarden.net/media/upload/thumb/0/05/0005Charmeleon.png/500px-0005Charmeleon.png', 'Fire', NULL, 1.1, 19.0, 'When it swings its burning tail, it elevates the temperature to unbearably high levels.', 58, 64, 58, 80, 65, 80, 1, null),
-(6, 'Charizard', 'https://archives.bulbagarden.net/media/upload/thumb/3/38/0006Charizard.png/500px-0006Charizard.png', 'Fire', 'Flying', 1.7, 90.5, 'Spits fire that is hot enough to melt boulders. Known to cause forest fires unintentionally.', 78, 84, 78, 109, 85, 100, 1, null),
-(7, 'Squirtle', 'https://archives.bulbagarden.net/media/upload/thumb/5/54/0007Squirtle.png/500px-0007Squirtle.png', 'Water', NULL, 0.5, 9.0, 'After birth, its back swells and hardens into a shell. Powerfully sprays foam from its mouth.', 44, 48, 65, 50, 64, 43, 1, null),
-(8, 'Wartortle', 'https://archives.bulbagarden.net/media/upload/thumb/0/0f/0008Wartortle.png/500px-0008Wartortle.png', 'Water', NULL, 1.0, 22.5, 'Often hides in water to stalk unwary prey. For swimming fast, it moves its ears to maintain balance.', 59, 63, 80, 65, 80, 58, 1, null),
-(9, 'Blastoise', 'https://archives.bulbagarden.net/media/upload/thumb/0/0a/0009Blastoise.png/500px-0009Blastoise.png', 'Water', NULL, 1.6, 85.5, 'A brutal Pokémon with pressurized water jets on its shell. They are used for high speed tackles.', 79, 83, 100, 85, 105, 78, 1, null);
+(1, 'Bulbasaur', 'https://archives.bulbagarden.net/media/upload/thumb/f/fb/0001Bulbasaur.png/500px-0001Bulbasaur.png', 'Grass', 'Poison', 0.7, 6.9, 'A strange seed was planted on its back at birth.', 45, 49, 49, 65, 65, 45, 1),
+(2, 'Ivysaur', 'https://archives.bulbagarden.net/media/upload/thumb/8/81/0002Ivysaur.png/500px-0002Ivysaur.png', 'Grass', 'Poison',1.0, 13.0, 'When the bulb on its back grows large, it appears to lose the ability to stand on its hind legs.', 60, 62, 63, 80, 80, 60, 1),
+(3, 'Venusaur', 'https://archives.bulbagarden.net/media/upload/thumb/6/6b/0003Venusaur.png/500px-0003Venusaur.png', 'Grass', 'Poison', 2.0, 100.0, 'Its plant blooms when it is absorbing solar energy. It stays on the move to seek sunlight.', 80, 82, 83, 100, 100, 80, 1),
+(4, 'Charmander', 'https://archives.bulbagarden.net/media/upload/thumb/2/27/0004Charmander.png/500px-0004Charmander.png', 'Fire', NULL, 0.6, 8.5, 'Obviously prefers hot places. When it rains, steam is said to spout from the tip of its tail.', 39, 52, 43, 60, 50, 65, 1),
+(5, 'Charmeleon', 'https://archives.bulbagarden.net/media/upload/thumb/0/05/0005Charmeleon.png/500px-0005Charmeleon.png', 'Fire', NULL, 1.1, 19.0, 'When it swings its burning tail, it elevates the temperature to unbearably high levels.', 58, 64, 58, 80, 65, 80, 1),
+(6, 'Charizard', 'https://archives.bulbagarden.net/media/upload/thumb/3/38/0006Charizard.png/500px-0006Charizard.png', 'Fire', 'Flying', 1.7, 90.5, 'Spits fire that is hot enough to melt boulders. Known to cause forest fires unintentionally.', 78, 84, 78, 109, 85, 100, 1),
+(7, 'Squirtle', 'https://archives.bulbagarden.net/media/upload/thumb/5/54/0007Squirtle.png/500px-0007Squirtle.png', 'Water', NULL, 0.5, 9.0, 'After birth, its back swells and hardens into a shell. Powerfully sprays foam from its mouth.', 44, 48, 65, 50, 64, 43, 1),
+(8, 'Wartortle', 'https://archives.bulbagarden.net/media/upload/thumb/0/0f/0008Wartortle.png/500px-0008Wartortle.png', 'Water', NULL, 1.0, 22.5, 'Often hides in water to stalk unwary prey. For swimming fast, it moves its ears to maintain balance.', 59, 63, 80, 65, 80, 58, 1),
+(9, 'Blastoise', 'https://archives.bulbagarden.net/media/upload/thumb/0/0a/0009Blastoise.png/500px-0009Blastoise.png', 'Water', NULL, 1.6, 85.5, 'A brutal Pokémon with pressurized water jets on its shell. They are used for high speed tackles.', 79, 83, 100, 85, 105, 78, 1);
 
 -- Moves
 INSERT INTO public.move (name, move_type, category, pp, power, accuracy, description, generation_id) VALUES 
@@ -297,7 +307,7 @@ INSERT INTO public.move (name, move_type, category, pp, power, accuracy, descrip
 ('Solar Beam', 'Grass', 'Special', 10, 120, 1.00, 'Charges on first turn, attacks on second.', 1)
 ON CONFLICT (name) DO NOTHING;
 
--- Moves assignments
+-- Moves to Pokemon assignments (Bulbasaur)
 INSERT INTO public.pokemon_moves (pokemon_id, move_id)
 SELECT p.id, m.id
 FROM public.pokemon p
