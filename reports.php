@@ -18,6 +18,11 @@ try {
     // 3. Pobieranie danych z widoku Top Ataków
     $topMoves = $pdo->query("SELECT * FROM public.v_top_moves")->fetchAll(PDO::FETCH_ASSOC);
 
+    $topMoves = $pdo->query("SELECT * FROM public.v_top_moves")->fetchAll(PDO::FETCH_ASSOC);
+
+    // DODAJ TO: Pobieranie danych z widoku z HAVING
+    $strongTypes = $pdo->query("SELECT * FROM public.v_strong_types")->fetchAll(PDO::FETCH_ASSOC);
+
 } catch (PDOException $e) {
     die("Database Error: " . $e->getMessage());
 }
@@ -194,6 +199,43 @@ try {
                     <td style="width: 60%;">
                         <div class="bar-wrapper" style="width: 100%; height: 12px;"><div class="bar-fill" style="width: <?= min(100, $row['pokemon_count']*10) ?>%; background: #9C27B0;"></div></div>
                     </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- RAPORT 4: ELITE TYPES (HAVING CLAUSE) -->
+    <div class="report-card" style="border-left: 5px solid #FF9800;">
+        <div class="report-header">
+            <div>
+                <div class="report-title">Elite Types (Total Stats > 300)</div>
+                <div class="report-desc">Types with high average stats total. Filtered using SQL <strong>HAVING</strong> clause.</div>
+            </div>
+            <div style="font-family: monospace; background: #eee; padding: 5px 10px; border-radius: 5px; font-size: 0.8rem;">VIEW: v_strong_types</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Pokemon Count</th>
+                    <th>Avg Total Stats</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach($strongTypes as $row): ?>
+                <tr>
+                    <td><span class="type-badge type-<?= strtolower($row['pokemon_type']) ?>"><?= $row['pokemon_type'] ?></span></td>
+                    <td><?= $row['pokemon_count'] ?></td>
+                    <td>
+                        <!-- Pasek postępu dla sumy statystyk (max ok. 600-700) -->
+                        <div class="bar-wrapper" style="width: 150px;">
+                            <div class="bar-fill" style="width: <?= min(100, ($row['avg_total_stats']/600)*100) ?>%; background: #FF9800;"></div>
+                        </div>
+                        <strong><?= $row['avg_total_stats'] ?></strong>
+                    </td>
+                    
                 </tr>
                 <?php endforeach; ?>
             </tbody>
