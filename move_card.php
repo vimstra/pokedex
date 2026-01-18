@@ -1,5 +1,4 @@
 <?php
-// 1. Inicjalizacja
 session_start();
 
 if (!isset($_GET['id']) || empty($_GET['id'])) {
@@ -11,7 +10,6 @@ $id = (int)$_GET['id'];
 $move = null;
 $learnedBy = [];
 
-// Dane do bazy
 $host = "db"; 
 $dbname = "pokedex";
 $user = "root";
@@ -21,7 +19,6 @@ try {
     $dsn = "pgsql:host=$host;port=5432;dbname=$dbname;";
     $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    // 2. Pobranie danych Ataku
     $sql = "SELECT m.*, 
                    m.move_type::text as type, 
                    m.category::text as cat,
@@ -38,7 +35,7 @@ try {
         die("Move not found!");
     }
 
-    // 3. Pobranie Pokemonów, które umieją ten atak
+    // pulling pokemons who know this move
     // JOIN: pokemon -> pokemon_moves
     $sqlLearned = "
         SELECT p.id, p.pokedex_number, p.name, p.image_url, 
@@ -73,7 +70,7 @@ try {
         
         /* Top Bar */
         .top-bar {
-            background-color: #333; /* Ciemny dla odmiany od Pokemonów */
+            background-color: #333;
             padding: 20px;
             color: white;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
@@ -108,7 +105,6 @@ try {
             margin-bottom: 30px;
         }
 
-        /* Move Header Info */
         .move-header { border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 20px; }
         .move-name { font-size: 2.5rem; font-weight: 800; color: #333; margin-bottom: 10px; }
         .move-desc { font-size: 1.1rem; color: #666; font-style: italic; line-height: 1.6; margin-bottom: 20px; }
@@ -116,18 +112,15 @@ try {
         .badges-row { display: flex; gap: 10px; margin-bottom: 20px; }
         .badge { padding: 8px 16px; border-radius: 8px; color: white; font-weight: 700; text-transform: uppercase; font-size: 0.9rem; }
         
-        /* Stats Grid */
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: center; }
         .stat-box { background: #f9f9f9; padding: 15px; border-radius: 10px; border: 1px solid #eee; }
         .stat-label { font-size: 0.8rem; color: #999; text-transform: uppercase; font-weight: 700; margin-bottom: 5px; }
         .stat-val { font-size: 1.5rem; font-weight: 800; color: #333; }
 
-        /* Pokemon Grid (Learned By) */
         .section-title { font-size: 1.5rem; font-weight: 800; margin: 40px 0 20px 0; color: #333; padding-left: 10px; border-left: 5px solid #333; }
         
         .poke-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; justify-items: center; }
         
-        /* Tile Styles (Skopiowane z index.php/pokemon_card.php dla spójności) */
         .poke-tile { 
             width: 180px; height: 180px; background: white; border-radius: 15px; 
             box-shadow: 0 5px 15px rgba(0,0,0,0.05); border: 2px solid transparent; 
@@ -139,14 +132,12 @@ try {
         .poke-name { font-weight: 700; font-size: 1rem; text-transform: uppercase; margin-top: 10px; color: #333; }
         .poke-index { font-size: 0.8rem; color: #ccc; font-weight: 600; }
         
-        /* Kolory typów */
         .type-fire { background-color: #F07F31; } .type-water { background-color: #698FEF; } .type-grass { background-color: #77C750; }
         .type-electric { background-color: #F8D12E; color: #333;} .type-psychic { background-color: #F95587; } .type-rock { background-color: #B89F39; }
         .type-normal { background-color: #A7A779; } .type-ice { background-color: #97D8D8; color: #333; } .type-fighting {background-color: #C03028; } .type-poison {background-color: #A140A1; }
         .type-ground {background-color: #E1BF67; } .type-flying {background-color: #A790EF; } .type-bug {background-color: #A7B920; } .type-ghost {background-color: #705898; }
         .type-dragon {background-color: #7038F7; } .type-dark {background-color: #705848; } .type-steel {background-color: #B8B8CF; } .type-fairy {background-color: #ED99AB; }
         
-        /* Kolory kategorii */
         .category-physical { background-color: #EB5629; } .category-special { background-color: #375AB1; } .category-status { background-color: #818181; }
 
     </style>
@@ -154,7 +145,6 @@ try {
 <body>
 
     <div class="top-bar">
-        <!-- Javascript history back dla wygody, lub link do index.php -->
         <a href="javascript:history.back()" class="back-btn">&larr; Go Back</a>
         <span style="font-weight: 800; font-size: 1.2rem;"><?= htmlspecialchars($move['name']) ?></span>
         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'Admin'): ?>

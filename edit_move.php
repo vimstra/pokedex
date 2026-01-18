@@ -35,7 +35,6 @@ try {
     <meta charset="UTF-8">
     <title>Edit Move</title>
     <style>
-        /* Skopiuj style kontenera i formularza z add_move.php */
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
         body { font-family: 'Poppins', sans-serif; background: #f8f9fa; padding: 40px; }
         .container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }

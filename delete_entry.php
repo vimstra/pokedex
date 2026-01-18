@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-// Tylko Admin
+// admin only
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'Admin') {
     die("Access denied");
 }
@@ -20,12 +20,12 @@ try {
     $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
     if ($type === 'pokemon') {
-        // Usuwamy zależności ręcznie dla pewności (jeśli w bazie nie ma ON DELETE CASCADE)
+        // deleting from the database just to make sure (in case theres not on delete cascade in db)
         $pdo->prepare("DELETE FROM pokemon_moves WHERE pokemon_id = ?")->execute([$id]);
         $pdo->prepare("DELETE FROM evolution WHERE pre_evolution_id = ? OR post_evolution_id = ?")->execute([$id, $id]);
         $pdo->prepare("DELETE FROM user_party WHERE pokemon_id = ?")->execute([$id]);
         
-        // Usuwamy pokemona
+        // deleting the pokemon
         $stmt = $pdo->prepare("DELETE FROM pokemon WHERE id = ?");
         $stmt->execute([$id]);
         
@@ -37,7 +37,7 @@ try {
         $stmt = $pdo->prepare("DELETE FROM move WHERE id = ?");
         $stmt->execute([$id]);
         
-        header("Location: index.php?tab=moves"); // Opcjonalnie przekierowanie na zakładkę
+        header("Location: index.php?tab=moves");
     }
 
 } catch (PDOException $e) {

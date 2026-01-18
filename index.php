@@ -17,7 +17,7 @@ try {
     $dsn = "pgsql:host=$host;port=5432;dbname=$dbname;";
     $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    // Tworzenie kont domyślnych
+    // default accounts (for some reason addong hashed password didnt work for me directly from database in init.sql fileS)
     $defaultUsers = [
         ['u' => 'admin', 'p' => 'admin', 'r' => 'Admin'],
         ['u' => 'common', 'p' => 'common', 'r' => 'Common']
@@ -33,7 +33,7 @@ try {
         }
     }
 
-    // OBSŁUGA LOGOWANIA
+    // sign IN
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
         $username = $_POST['username'] ?? '';
         $pass = $_POST['password'] ?? '';
@@ -53,7 +53,7 @@ try {
         }
     }
 
-    // OBSŁUGA REJESTRACJI
+    // sign UP
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'register') {
         $username = $_POST['username'] ?? '';
         $passRaw = $_POST['password'] ?? '';
@@ -81,36 +81,31 @@ try {
         }
     }
 
-    // WYLOGOWANIE
+    // log out
     if (isset($_GET['logout'])) {
         session_destroy();
         header("Location: index.php");
         exit;
     }
 
-    // POBIERANIE DANYCH POKEMONÓW I ATAKÓW
+    // pulling pokemons and moves from db
     $stmtPkmn = $pdo->query("SELECT *, pokemon_type::text as type_1, secondary_type::text as type_2 FROM public.pokemon ORDER BY pokedex_number ASC");
     $pokemons = $stmtPkmn->fetchAll(PDO::FETCH_ASSOC);
-
-    // USUNIĘTO BŁĘDNY KOD Z $id TUTAJ
 
     $stmtMoves = $pdo->query("SELECT id, name, LOWER(move_type::text) as type, LOWER(category::text) as category, power, accuracy, pp FROM public.move");
     $movesFromDb = $stmtMoves->fetchAll(PDO::FETCH_ASSOC);
 
-    // POBIERANIE MY PARTY (Przeniesione tutaj, żeby było bezpieczne)
+    // pulling my party from db
     $myPartyIds = [];
     if (isset($_SESSION['user_id'])) {
         try {
             $stmtParty = $pdo->prepare("SELECT pokemon_id FROM public.user_party WHERE user_id = ?");
             $stmtParty->execute([$_SESSION['user_id']]);
-            // Pobieramy jako prostą tablicę liczb (FETCH_COLUMN), a nie tablicę tablic
             $myPartyIds = $stmtParty->fetchAll(PDO::FETCH_COLUMN);
         } catch (PDOException $e) {
-            // Ignorujemy błąd jeśli tabela jeszcze nie istnieje
         }
     }
-
-    // POBIERANIE DANYCH DO TYPE CHART (EFEKTYWNOŚĆ)
+// type effectiveness
     $typeChart = [];
     try {
         $stmtEff = $pdo->query("SELECT attacking_type::text as atk, defending_type::text as def, multiplier FROM public.type_effectiveness");
@@ -119,7 +114,6 @@ try {
             $typeChart[$row['atk']][$row['def']] = (float)$row['multiplier'];
         }
     } catch (PDOException $e) {
-        // Ignorujemy brak tabeli effectiveness
     }
 
 } catch (PDOException $e) {
@@ -232,7 +226,6 @@ try {
         <div class="content-wrapper">
     <!-- POKEMONS TAB -->
     <div id="pokemons" class="content-display visible">        
-        <!-- POPRAWIONY FRAGMENT -->
         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'Admin'): ?>
             <div style="text-align: center; margin-bottom: 20px;">
                 <a href="add_pokemon.php" class="reset-btn" style="background-color: #28a745; text-decoration: none; display: inline-block;">+ Add Pokemon</a>
@@ -346,7 +339,7 @@ try {
         const buttons = document.querySelectorAll('.menu-btn');
         const contents = document.querySelectorAll('.content-display');
 
-        // LOGIKA AUTOMATYCZNEGO PRZEWIJANIA PRZY BŁĘDZIE
+        // automatic scroll if error occures
         window.addEventListener('DOMContentLoaded', () => {
             const hasLoginError = <?php echo isset($loginError) ? 'true' : 'false'; ?>;
             const hasRegisterError = <?php echo isset($registerError) ? 'true' : 'false'; ?>;
@@ -476,9 +469,8 @@ try {
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
-        /* =========================================
-           LOGIKA ATAKÓW
-           ========================================= */
+
+        // moves logic
         const allMoves = <?php echo json_encode($movesFromDb); ?>;
         let moveState = { type: null, category: null, search: "" };
 
@@ -533,9 +525,7 @@ try {
             `).join('') : '<p style="text-align:center; margin-top:20px;">No moves match your criteria.</p>';
         }
 
-        /* =========================================
-           LOGIKA TYPE CHART
-           ========================================= */
+// type chart logic
         const chartData = <?php echo json_encode($typeChart); ?>;
         let chartState = { attacker: null, defenders: [] };
 

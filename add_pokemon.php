@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-// Zabezpieczenie: Tylko Admin
+// restriction: for Admin onyl
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'Admin') {
     header("Location: index.php");
     exit;
@@ -20,11 +20,11 @@ try {
     $dsn = "pgsql:host=$host;port=5432;dbname=$dbname;";
     $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    // Pobranie listy wszystkich ataków do formularza
+    // pulling a list of all attacks to a form
     $stmtMoves = $pdo->query("SELECT id, name, move_type::text as type, category::text as cat FROM public.move ORDER BY name ASC");
     $allMoves = $stmtMoves->fetchAll(PDO::FETCH_ASSOC);
 
-    // OBSŁUGA FORMULARZA
+    // form
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dexNum = $_POST['pokedex_number'];
         $name = $_POST['name'];
@@ -143,13 +143,12 @@ try {
             font-size: 0.9rem;
         }
         .moves-list-scroll {
-            height: 300px; /* Nieco wyższa lista */
+            height: 300px;
             overflow-y: scroll;
             display: grid;
-            /* Mniejsze kafelki, automatyczne dopasowanie */
             grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 10px;
-            padding-right: 5px; /* Miejsce na scrollbar */
+            padding-right: 5px;
         }
         .move-option { 
             display: flex; 
@@ -170,12 +169,11 @@ try {
             transform: translateY(-1px);
         }
         
-        /* Type Dots */
         .dot { 
             width: 12px; height: 12px; 
             border-radius: 50%; 
             display: inline-block; 
-            flex-shrink: 0; /* Zapobiega zgniataniu kropki */
+            flex-shrink: 0;
         }
         .type-fire { background-color: #F07F31; } .type-water { background-color: #698FEF; } .type-grass { background-color: #77C750; }
         .type-electric { background-color: #F8D12E; } .type-psychic { background-color: #F95587; } .type-rock { background-color: #B89F39; }
@@ -271,7 +269,6 @@ try {
                     
                     <div class="moves-list-scroll">
                         <?php foreach($allMoves as $m): ?>
-                            <!-- Dodano onclick labela dla lepszego UX -->
                             <label class="move-option" data-name="<?= strtolower($m['name']) ?>">
                                 <input type="checkbox" name="moves[]" value="<?= $m['id'] ?>">
                                 <span class="dot type-<?= strtolower($m['type']) ?>"></span>

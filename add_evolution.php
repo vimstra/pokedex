@@ -17,7 +17,6 @@ try {
         $postId = $_POST['post_id'];
         $trigger = $_POST['trigger'];
         
-        // Zbieramy dane zależnie od typu
         $lvl = (!empty($_POST['min_level']) && $trigger === 'Level') ? $_POST['min_level'] : null;
         $item = (!empty($_POST['item']) && $trigger === 'Item') ? $_POST['item'] : null;
         $notes = (!empty($_POST['notes']) && $trigger === 'Other') ? $_POST['notes'] : null;
@@ -45,7 +44,6 @@ try {
         select, input, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; }
         button { width: 100%; padding: 15px; background: #FF9800; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; text-transform: uppercase; margin-top:10px; }
         
-        /* Klasa do ukrywania pól */
         .hidden { display: none; }
     </style>
 </head>
@@ -75,19 +73,16 @@ try {
             </select>
         </div>
 
-        <!-- Pole dla Level -->
         <div class="form-group" id="field-level">
             <label>Min Level</label>
             <input type="number" name="min_level" placeholder="e.g. 16">
         </div>
 
-        <!-- Pole dla Item -->
         <div class="form-group hidden" id="field-item">
             <label>Item Name</label>
             <input type="text" name="item" placeholder="e.g. Fire Stone">
         </div>
 
-        <!-- Pole dla Other (Notes) -->
         <div class="form-group hidden" id="field-notes">
             <label>Condition Description</label>
             <input type="text" name="notes" placeholder="e.g. High Friendship during day">

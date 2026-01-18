@@ -136,7 +136,7 @@ try {
                 <div class="moves-list-scroll">
                     <?php foreach($allMoves as $m): ?>
                         <label class="move-option">
-                            <!-- Sprawdzamy czy ID ataku jest w tablicy currentMoveIds -->
+                            <!-- check if move ID is in currentMoveIds array -->
                             <input type="checkbox" name="moves[]" value="<?= $m['id'] ?>" <?= in_array($m['id'], $currentMoveIds) ? 'checked' : '' ?>>
                             <span><?= htmlspecialchars($m['name']) ?></span>
                         </label>

@@ -9,18 +9,14 @@ try {
     $dsn = "pgsql:host=$host;port=5432;dbname=$dbname;";
     $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    // 1. Pobieranie danych z widoku Statystyk Typów
     $statsByType = $pdo->query("SELECT * FROM public.v_type_statistics")->fetchAll(PDO::FETCH_ASSOC);
 
-    // 2. Pobieranie danych z widoku Generacji
     $genStats = $pdo->query("SELECT * FROM public.v_generation_counts")->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. Pobieranie danych z widoku Top Ataków
     $topMoves = $pdo->query("SELECT * FROM public.v_top_moves")->fetchAll(PDO::FETCH_ASSOC);
 
     $topMoves = $pdo->query("SELECT * FROM public.v_top_moves")->fetchAll(PDO::FETCH_ASSOC);
 
-    // DODAJ TO: Pobieranie danych z widoku z HAVING
     $strongTypes = $pdo->query("SELECT * FROM public.v_strong_types")->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
@@ -74,11 +70,9 @@ try {
         tr:last-child td { border-bottom: none; }
         tr:hover { background-color: #fafafa; }
 
-        /* Paski postępu w tabeli */
         .bar-wrapper { width: 100px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; display: inline-block; margin-right: 10px; vertical-align: middle; }
         .bar-fill { height: 100%; border-radius: 3px; }
         
-        /* Kolory typów */
         .type-badge { padding: 4px 10px; border-radius: 4px; color: white; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; }
         .type-fire { background-color: #F07F31; } .type-water { background-color: #698FEF; } .type-grass { background-color: #77C750; }
         .type-electric { background-color: #F8D12E; color:#333; } .type-psychic { background-color: #F95587; } .type-rock { background-color: #B89F39; }
@@ -96,7 +90,6 @@ try {
 
 <div class="container">
 
-    <!-- RAPORT 1: STATYSTYKI TYPÓW -->
     <div class="report-card">
         <div class="report-header">
             <div>
@@ -136,7 +129,6 @@ try {
         </table>
     </div>
 
-    <!-- RAPORT 2: TOP MOVES -->
     <div class="report-card">
         <div class="report-header">
             <div>
@@ -173,7 +165,6 @@ try {
         </table>
     </div>
 
-    <!-- RAPORT 3: GENERATIONS -->
     <div class="report-card">
         <div class="report-header">
             <div>
@@ -205,7 +196,6 @@ try {
         </table>
     </div>
 
-    <!-- RAPORT 4: ELITE TYPES (HAVING CLAUSE) -->
     <div class="report-card" style="border-left: 5px solid #FF9800;">
         <div class="report-header">
             <div>
@@ -229,7 +219,6 @@ try {
                     <td><span class="type-badge type-<?= strtolower($row['pokemon_type']) ?>"><?= $row['pokemon_type'] ?></span></td>
                     <td><?= $row['pokemon_count'] ?></td>
                     <td>
-                        <!-- Pasek postępu dla sumy statystyk (max ok. 600-700) -->
                         <div class="bar-wrapper" style="width: 150px;">
                             <div class="bar-fill" style="width: <?= min(100, ($row['avg_total_stats']/600)*100) ?>%; background: #FF9800;"></div>
                         </div>

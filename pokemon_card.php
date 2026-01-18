@@ -1,8 +1,6 @@
 <?php
-// 1. Inicjalizacja i Połączenie
 session_start();
 
-// Sprawdzenie czy podano ID
 if (!isset($_GET['id']) || empty($_GET['id'])) {
     header("Location: index.php");
     exit;
@@ -13,7 +11,6 @@ $pokemon = null;
 $moves = [];
 $evolutionChain = [];
 
-// Dane do bazy
 $host = "db"; 
 $dbname = "pokedex";
 $user = "root";
@@ -27,10 +24,10 @@ try {
                    p.pokemon_type::text as type_1, 
                    p.secondary_type::text as type_2,
                    g.name as gen_name,
-                   u.username as creator_name  -- Pobieramy nazwę autora
+                   u.username as creator_name 
             FROM public.pokemon p
             LEFT JOIN public.generation g ON p.generation_id = g.id
-            LEFT JOIN public.users u ON p.created_by = u.user_id -- Relacja 1-N
+            LEFT JOIN public.users u ON p.created_by = u.user_id
             WHERE p.id = ?";
             
     $stmt = $pdo->prepare($sql);
@@ -41,7 +38,6 @@ try {
         die("Pokemon not found!");
     }
 
-    // Sprawdzenie ulubionych
     $isFavorite = false;
     if (isset($_SESSION['user_id'])) {
         $stmtFav = $pdo->prepare("SELECT COUNT(*) FROM public.user_party WHERE user_id = ? AND pokemon_id = ?");
@@ -49,11 +45,11 @@ try {
         $isFavorite = $stmtFav->fetchColumn() > 0;
     }
 
-    // 3. LOGIKA EWOLUCJI (Recursive CTE)
-    // To zapytanie znajduje całą linię ewolucyjną, niezależnie od tego, którego pokemona z linii oglądamy.
-    // Działa w dwóch krokach:
-    // 1. Znajduje "korzeń" rodziny (pokemona, który nie ma pre-ewolucji w tej linii).
-    // 2. Schodzi w dół po drzewie ewolucji.
+// EVOLUTION LOGIC (recursive)
+// this query finds the entire evolutionary line, regardless of which Pokémon in that line we're viewing.
+// It works in two steps:
+// 1. Finds the "root" of the family (a Pokémon that doesn't have a pre-evolution in that line).
+// 2. Goes down the evolution tree.
     
     $sqlEvo = "
     WITH RECURSIVE family_tree AS (
@@ -99,7 +95,6 @@ try {
     $evolutionChain = $stmtEvo->fetchAll(PDO::FETCH_ASSOC);
 
 
-    // 4. Pobranie ataków
     $stmtMoves = $pdo->prepare("SELECT m.*, m.move_type::text as type, m.category::text as category 
                                 FROM public.move m 
                                 JOIN public.pokemon_moves pm ON m.id = pm.move_id 
@@ -118,7 +113,6 @@ function getStatColor($val) {
     return '#5bc963';
 }
 
-// Helper do formatowania tekstu ewolucji
 function formatTrigger($row) {
     $type = $row['trigger_type'];
     
@@ -129,7 +123,7 @@ function formatTrigger($row) {
         return "Use " . $row['item'];
     }
     if ($type === 'Other' && !empty($row['notes'])) {
-        return $row['notes']; // Wyświetla tekst wpisany w polu "Other"
+        return $row['notes'];
     }
     
     return $type;
@@ -226,7 +220,6 @@ function formatTrigger($row) {
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        /* STATS */
         .stats-container { margin-top: 30px; }
         .stat-row { display: flex; align-items: center; margin-bottom: 12px; }
         .stat-label { width: 100px; font-weight: 600; color: #888; font-size: 0.9rem; }
@@ -234,7 +227,6 @@ function formatTrigger($row) {
         .bar-bg { flex-grow: 1; height: 10px; background: #eee; border-radius: 10px; overflow: hidden; }
         .bar-fill { height: 100%; border-radius: 10px; transition: width 1s ease-out; }
 
-        /* --- EVOLUTION SECTION STYLES --- */
         .evolution-section { padding: 40px; border-bottom: 1px solid #eee; background: #fffcfc; }
         .evo-flex {
             display: flex;
@@ -268,8 +260,6 @@ function formatTrigger($row) {
         .arrow-trigger { font-size: 0.75rem; font-weight: 700; color: #DC0A2D; margin-bottom: 5px; text-align: center;}
         .arrow-symbol { font-size: 1.5rem; color: #ccc; }
 
-
-        /* MOVES */
         .moves-section { padding: 40px; }
         .section-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 20px; color: #DC0A2D; }
         .moves-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
@@ -287,7 +277,6 @@ function formatTrigger($row) {
         .move-stats { font-size: 0.8rem; color: #888; display: flex; gap: 10px; margin-top: 5px;}
         .move-desc { font-size: 0.8rem; color: #666; margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px; }
 
-        /* Guzik Serca */
         .fav-btn {
             background: white; border: 2px solid #e0e0e0; border-radius: 50%;
             width: 45px; height: 45px; display: flex; justify-content: center; align-items: center;
@@ -301,7 +290,6 @@ function formatTrigger($row) {
         .fav-btn:hover { transform: translateY(-2px); border-color: #aaa; }
         @keyframes heartPop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
 
-        /* Kolory typów */
         .type-fire { background-color: #F07F31; } .type-water { background-color: #698FEF; } .type-grass { background-color: #77C750; }
         .type-electric { background-color: #F8D12E; color: #333;} .type-psychic { background-color: #F95587; } .type-rock { background-color: #B89F39; }
         .type-normal { background-color: #A7A779; } .type-ice { background-color: #97D8D8; color: #333; } .type-fighting {background-color: #C03028; } .type-poison {background-color: #A140A1; }
@@ -332,7 +320,6 @@ function formatTrigger($row) {
                 </div>
                 
                 <div class="info-wrapper">
-                    <!-- HEADER: ID + SERCE -->
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px;">
                         <div class="poke-id">#<?= str_pad($pokemon['pokedex_number'], 3, '0', STR_PAD_LEFT) ?></div>
                         
@@ -364,7 +351,6 @@ function formatTrigger($row) {
                         <div><strong>Gen:</strong> <?= htmlspecialchars($pokemon['gen_name']) ?></div>
                     </div>
 
-                    <!-- PASKI STATYSTYK -->
                     <div class="stats-container">
                         <?php
                         $stats = [
@@ -398,14 +384,12 @@ function formatTrigger($row) {
                 </div>
             </div>
 
-            <!-- EVOLUTION SECTION (NOWA) -->
             <?php if (!empty($evolutionChain) && count($evolutionChain) > 1): ?>
             <div class="evolution-section">
                 <h3 class="section-title" style="text-align: center;">Evolution Chain</h3>
                 <div class="evo-flex">
                     <?php foreach($evolutionChain as $index => $evo): ?>
                         
-                        <!-- Jeśli to nie pierwszy pokemon, wyświetl strzałkę PRZED nim -->
                         <?php if ($index > 0): ?>
                             <div class="evo-arrow">
                                 <span class="arrow-trigger"><?= htmlspecialchars(formatTrigger($evo)) ?></span>
@@ -413,7 +397,6 @@ function formatTrigger($row) {
                             </div>
                         <?php endif; ?>
 
-                        <!-- Karta Pokemona -->
                         <a href="pokemon_card.php?id=<?= $evo['id'] ?>" class="evo-card <?= ($evo['id'] == $id) ? 'current' : '' ?>">
                             <img src="<?= htmlspecialchars($evo['image_url']) ?>" class="evo-img">
                             <span class="evo-name"><?= htmlspecialchars($evo['name']) ?></span>
@@ -425,7 +408,6 @@ function formatTrigger($row) {
             </div>
             <?php endif; ?>
 
-            <!-- MOVES -->
             <div class="moves-section">
                 <h3 class="section-title">Moveset</h3>
                 <?php if (empty($moves)): ?>

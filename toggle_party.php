@@ -25,19 +25,15 @@ try {
     $dsn = "pgsql:host=$host;port=5432;dbname=$dbname;";
     $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    // Sprawdź czy już jest w ulubionych
     $check = $pdo->prepare("SELECT COUNT(*) FROM public.user_party WHERE user_id = ? AND pokemon_id = ?");
     $check->execute([$userId, $pokemonId]);
     $exists = $check->fetchColumn() > 0;
 
     if ($exists) {
-        // Usuń
         $del = $pdo->prepare("DELETE FROM public.user_party WHERE user_id = ? AND pokemon_id = ?");
         $del->execute([$userId, $pokemonId]);
         echo json_encode(['success' => true, 'action' => 'removed']);
     } else {
-        // Dodaj
-        // (Opcjonalnie: sprawdź czy ma mniej niż 6 pokemonów, jeśli chcesz limit)
         $ins = $pdo->prepare("INSERT INTO public.user_party (user_id, pokemon_id) VALUES (?, ?)");
         $ins->execute([$userId, $pokemonId]);
         echo json_encode(['success' => true, 'action' => 'added']);
