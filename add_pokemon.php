@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-// restriction: for Admin onyl
+// Zabezpieczenie: Tylko Admin
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'Admin') {
     header("Location: index.php");
     exit;
@@ -20,11 +20,15 @@ try {
     $dsn = "pgsql:host=$host;port=5432;dbname=$dbname;";
     $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    // pulling a list of all attacks to a form
-    $stmtMoves = $pdo->query("SELECT id, name, move_type::text as type, category::text as cat FROM public.move ORDER BY name ASC");
+    // 1. Pobranie listy ataków
+    $stmtMoves = $pdo->query("SELECT id, name, move_type::text as type FROM public.move ORDER BY name ASC");
     $allMoves = $stmtMoves->fetchAll(PDO::FETCH_ASSOC);
 
-    // form
+    // 2. Pobranie listy generacji (Tego brakowało)
+    $stmtGen = $pdo->query("SELECT * FROM public.generation ORDER BY id ASC");
+    $generations = $stmtGen->fetchAll(PDO::FETCH_ASSOC);
+
+    // OBSŁUGA FORMULARZA
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dexNum = $_POST['pokedex_number'];
         $name = $_POST['name'];
@@ -41,6 +45,7 @@ try {
         $spa = $_POST['spa'];
         $spd = $_POST['spd'];
         $spe = $_POST['spe'];
+        $genId = $_POST['generation_id']; // Pobieramy generację
         
         $selectedMoves = $_POST['moves'] ?? [];
 
@@ -49,12 +54,16 @@ try {
         try {
             $sql = "INSERT INTO public.pokemon 
                     (pokedex_number, name, image_url, pokemon_type, secondary_type, description, height, weight, hp, attack, defense, sp_attack, sp_defense, speed, generation_id, created_by) 
-                    VALUES (?, ?, ?, ?::public.element_type, ?::public.element_type, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+                    VALUES (?, ?, ?, ?::public.element_type, ?::public.element_type, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     RETURNING id";
             
             $stmt = $pdo->prepare($sql);
-            $stmt->execute([$dexNum, $name, $img, $type1, $type2, $desc, $height, $weight, $hp, $atk, $def, $spa, $spd, $spe, $_POST['generation_id'],
-                $_SESSION['user_id']]);
+            $stmt->execute([
+                $dexNum, $name, $img, $type1, $type2, $desc, $height, $weight, 
+                $hp, $atk, $def, $spa, $spd, $spe, 
+                $genId, 
+                $_SESSION['user_id']
+            ]);
             
             $newPokemonId = $stmt->fetchColumn();
 
@@ -86,7 +95,11 @@ try {
     <title>Add Pokemon - Admin</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
-        body { font-family: 'Poppins', sans-serif; background: #f8f9fa; color: #333; margin: 0; padding-bottom: 50px; }
+        
+        /* KLUCZOWA POPRAWKA: box-sizing zapobiega rozjeżdżaniu się pól input */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { font-family: 'Poppins', sans-serif; background: #f8f9fa; color: #333; padding-bottom: 50px; }
         
         .top-bar {
             background-color: #DC0A2D;
@@ -116,65 +129,67 @@ try {
         .container { max-width: 800px; margin: 40px auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
         h1 { text-align: center; color: #DC0A2D; margin-bottom: 30px; }
         
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 0.9rem; }
-        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; }
+        .form-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; /* Odstęp między kolumnami */
+        }
+        
+        .form-group { margin-bottom: 5px; } /* Mniejszy margines dolny wewnątrz grida */
+        
+        label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; color: #555; }
+        
+        input, select, textarea { 
+            width: 100%; 
+            padding: 12px; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            font-family: inherit; 
+            background: #fff;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #DC0A2D;
+            box-shadow: 0 0 0 3px rgba(220, 10, 45, 0.1);
+        }
+
         textarea { resize: vertical; height: 100px; }
         
-        .full-width { grid-column: 1 / -1; }
+        .full-width { grid-column: 1 / -1; margin-bottom: 15px; }
         
-        .submit-btn { width: 100%; padding: 15px; background: #DC0A2D; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; text-transform: uppercase; font-size: 1rem; margin-top: 20px; }
+        .submit-btn { width: 100%; padding: 15px; background: #DC0A2D; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; text-transform: uppercase; font-size: 1rem; margin-top: 20px; transition: 0.3s; }
         .submit-btn:hover { background: #b00824; }
         
-        /* Moves Selector Style - IMPROVED */
+        /* Moves Selector Style */
         .moves-container {
             border: 1px solid #ddd;
             border-radius: 8px;
             padding: 15px;
             background: #fafafa;
         }
-        #move-search-input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 15px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 0.9rem;
-        }
+        #move-search-input { margin-bottom: 15px; }
+        
         .moves-list-scroll {
             height: 300px;
             overflow-y: scroll;
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 10px;
+            grid-auto-rows: max-content;
+            gap: 8px;
             padding-right: 5px;
         }
         .move-option { 
-            display: flex; 
-            align-items: center; 
-            gap: 10px; 
-            font-size: 0.85rem; 
-            background: white; 
-            padding: 10px; 
-            border-radius: 6px; 
-            border: 1px solid #eee;
-            transition: all 0.2s;
-            cursor: pointer;
-            user-select: none;
+            display: flex; align-items: center; gap: 10px; 
+            font-size: 0.85rem; background: white; padding: 10px; 
+            border-radius: 6px; border: 1px solid #eee; 
+            transition: all 0.2s; cursor: pointer; user-select: none;
         }
-        .move-option:hover { 
-            border-color: #DC0A2D; 
-            background-color: #fff5f5;
-            transform: translateY(-1px);
-        }
+        .move-option:hover { border-color: #DC0A2D; background-color: #fff5f5; transform: translateY(-1px); }
+        .move-option:has(input:checked) { background-color: #ffe6e6; border-color: #DC0A2D; font-weight: 600; }
         
-        .dot { 
-            width: 12px; height: 12px; 
-            border-radius: 50%; 
-            display: inline-block; 
-            flex-shrink: 0;
-        }
+        /* Dots */
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
         .type-fire { background-color: #F07F31; } .type-water { background-color: #698FEF; } .type-grass { background-color: #77C750; }
         .type-electric { background-color: #F8D12E; } .type-psychic { background-color: #F95587; } .type-rock { background-color: #B89F39; }
         .type-normal { background-color: #A7A779; } .type-ice { background-color: #97D8D8; } .type-fighting {background-color: #C03028; } .type-poison {background-color: #A140A1; }
@@ -190,18 +205,10 @@ try {
 
 <div class="top-bar">
     <a href="index.php" class="back-btn">&larr; Back to Pokedex</a>
-    <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'Admin'): ?>
-        <div style="margin-left: auto; display: flex; gap: 10px;">
-            <a href="add_evolution.php?id=<?= $pokemon['id'] ?>" class="back-btn" style="background: #FF9800;">+ Evolution</a>
-            <a href="edit_pokemon.php?id=<?= $pokemon['id'] ?>" class="back-btn" style="background: #2196F3;">Edit</a>
-            <a href="delete_entry.php?type=pokemon&id=<?= $pokemon['id'] ?>" class="back-btn" style="background: #f44336;" onclick="return confirm('Are you sure you want to delete this Pokemon?');">Delete</a>
-        </div>
-    <?php endif; ?>
+    <span style="font-weight: 800; font-size: 1.2rem;">Add New Pokemon</span>
 </div>
 
 <div class="container">
-    <h1>Create New Entry</h1>
-
     <?php if ($success): ?>
         <div class="alert alert-success"><?= $success ?></div>
     <?php endif; ?>
@@ -227,12 +234,24 @@ try {
                 </select>
             </div>
             <div class="form-group">
-                <label>Secondary Type (Optional)</label>
+                <label>Secondary Type</label>
                 <select name="type2">
                     <option value="">None</option>
                     <?php foreach($types as $t): echo "<option value='$t'>$t</option>"; endforeach; ?>
                 </select>
             </div>
+
+            <!-- PRZYWRÓCONE POLE GENERACJI -->
+            <div class="form-group">
+                <label>Generation</label>
+                <select name="generation_id" required>
+                    <?php foreach($generations as $g): ?>
+                        <option value="<?= $g['id'] ?>"><?= $g['name'] ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <!-- Pusty div dla zachowania układu siatki (żeby gen nie był samotny) -->
+            <div class="form-group"></div>
 
             <div class="form-group full-width">
                 <label>Image URL</label>
@@ -261,18 +280,17 @@ try {
             <div class="form-group"><label>Sp. Def</label><input type="number" name="spd" required></div>
             <div class="form-group"><label>Speed</label><input type="number" name="spe" required></div>
 
-            <!-- Moves Selection with Search -->
+            <!-- Moves -->
             <div class="form-group full-width">
                 <label>Assign Moves (Click to select)</label>
                 <div class="moves-container">
                     <input type="text" id="move-search-input" placeholder="Type to search moves...">
-                    
                     <div class="moves-list-scroll">
                         <?php foreach($allMoves as $m): ?>
                             <label class="move-option" data-name="<?= strtolower($m['name']) ?>">
                                 <input type="checkbox" name="moves[]" value="<?= $m['id'] ?>">
                                 <span class="dot type-<?= strtolower($m['type']) ?>"></span>
-                                <span style="font-weight:600; color:#444;"><?= htmlspecialchars($m['name']) ?></span>
+                                <span style="font-weight:500; color:#333; margin-top:2px;"><?= htmlspecialchars($m['name']) ?></span>
                             </label>
                         <?php endforeach; ?>
                     </div>
@@ -290,14 +308,9 @@ try {
 
     searchInput.addEventListener('input', function(e) {
         const term = e.target.value.toLowerCase();
-
         moveOptions.forEach(option => {
             const name = option.getAttribute('data-name');
-            if (name.includes(term)) {
-                option.style.display = 'flex';
-            } else {
-                option.style.display = 'none';
-            }
+            option.style.display = name.includes(term) ? 'flex' : 'none';
         });
     });
 </script>

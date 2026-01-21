@@ -1,4 +1,4 @@
--- typy
+-- types
 DO $$ BEGIN
     CREATE TYPE public.element_type AS ENUM (
         'Normal', 'Fire', 'Water', 'Grass', 'Electric', 'Ice', 
@@ -13,11 +13,11 @@ DO $$ BEGIN
     CREATE TYPE public.user_role AS ENUM ('Admin', 'Common');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
--- tworzenie tabel 
+-- creating tables 
 
--- użytkownicy (pierwszych dwoch uzytkownikow "admin" i "common" dodajemy w pliku index.php bo cos przez baze mi hashowanie haseł nie działało)
--- hasła sa hashowane
--- dwie role: common i admin
+-- users (we add the first two users "admin" and "common" in the index.php file because password hashing wasn't working for me via the database)
+-- passwords are hashed
+-- two roles: common and admin
 CREATE TABLE IF NOT EXISTS public.users (
     user_id SMALLSERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
@@ -25,14 +25,14 @@ CREATE TABLE IF NOT EXISTS public.users (
     role public.user_role NOT NULL DEFAULT 'Common'
 );
 
--- generacje
+-- generations
 CREATE TABLE IF NOT EXISTS public.generation (
     id SMALLSERIAL PRIMARY KEY,
     name TEXT NOT NULL
 );
 
--- pokemony
--- walidajca danych, wymóg 6b
+-- pokemons
+-- data validation, requirement 6b
 CREATE TABLE IF NOT EXISTS public.pokemon (
     id SMALLSERIAL PRIMARY KEY,
     pokedex_number INT2 NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS public.pokemon (
     height NUMERIC(5, 2) NOT NULL CONSTRAINT check_height_pos CHECK (height > 0),
     weight NUMERIC(5, 1) NOT NULL CONSTRAINT check_weight_pos CHECK (weight > 0),
     description TEXT NOT NULL,
-    -- walidacja muszą być nieujemne)
+    -- validation must be non-negative)
     hp INT2 NOT NULL CONSTRAINT check_hp_pos CHECK (hp >= 0),
     attack INT2 NOT NULL CONSTRAINT check_atk_pos CHECK (attack >= 0),
     defense INT2 NOT NULL CONSTRAINT check_def_pos CHECK (defense >= 0),
@@ -51,10 +51,10 @@ CREATE TABLE IF NOT EXISTS public.pokemon (
     sp_defense INT2 NOT NULL CONSTRAINT check_spd_pos CHECK (sp_defense >= 0),
     speed INT2 NOT NULL CONSTRAINT check_spe_pos CHECK (speed >= 0),
     generation_id INT2 NOT NULL,
-    created_by INT4 -- może byciem nullem np dla pokemonow dodanych poprzez baze danych. wtedy w aplikacji wyswietla sie "added by : System"
+    created_by INT4 -- can be null e.g. for pokemons added via database. then "added by : System" is displayed in the application
 );
 
--- ataki - tutaj tez jest walidacja danych (wymóŋ 6b)
+-- moves - here is also data validation (requirement 6b)
 CREATE TABLE IF NOT EXISTS public.move (
     id SMALLSERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -67,14 +67,14 @@ CREATE TABLE IF NOT EXISTS public.move (
     generation_id INT2 NOT NULL
 );
 
--- tablica asocjacyjna dla pokemonow i ich atakow
+-- associative table for pokemons and their moves
 CREATE TABLE IF NOT EXISTS public.pokemon_moves (
     pokemon_id INT4 NOT NULL,
     move_id INT4 NOT NULL,
     PRIMARY KEY (pokemon_id, move_id)
 );
 
--- ewolucje
+-- evolutions
 CREATE TABLE IF NOT EXISTS public.evolution (
     pre_evolution_id INT4 NOT NULL,
     post_evolution_id INT4 NOT NULL,
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS public.evolution (
     PRIMARY KEY (pre_evolution_id, post_evolution_id)
 );
 
--- tablica dla efektywnoci typow
+-- table for type effectiveness
 CREATE TABLE IF NOT EXISTS public.type_effectiveness (
     attacking_type public.element_type NOT NULL,
     defending_type public.element_type NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS public.type_effectiveness (
     PRIMARY KEY (attacking_type, defending_type)
 );
 
--- tablica do budowania My Party
+-- table for building My Party
 CREATE TABLE IF NOT EXISTS public.user_party (
     user_id INT4 NOT NULL,
     pokemon_id INT4 NOT NULL,
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS public.user_party (
     PRIMARY KEY (user_id, pokemon_id)
 );
 
--- TRIGGERY - wymóg 6c - funkcje wbudowany i wyzwalacze, kontrola spójności danych, nlokada wprowadzenia niepoprawnych wartości danych
+-- TRIGGERS - requirement 6c - built-in functions and triggers, data consistency control, blocking entry of incorrect data values
 CREATE OR REPLACE FUNCTION check_duplicate_types()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -122,12 +122,12 @@ RETURNS TRIGGER AS $$
 DECLARE
     party_count INTEGER;
 BEGIN
-    -- Policz ile pokemonów użytkownik ma już w party
+    -- Count how many pokemons the user already has in party
     SELECT COUNT(*) INTO party_count 
     FROM public.user_party 
     WHERE user_id = NEW.user_id;
 
-    -- Jeśli ma już 6 lub więcej, zablokuj dodanie kolejnego
+    -- If they already have 6 or more, block adding another one
     IF party_count >= 6 THEN
         RAISE EXCEPTION 'Party is full! You can only have 6 Pokémon in your party.';
     END IF;
@@ -142,7 +142,7 @@ FOR EACH ROW
 EXECUTE FUNCTION check_party_limit();
 
 
--- klucze obce i relacje (wymóg 2b - wykorzystanie kluczy obcych)
+-- foreign keys and relations (requirement 2b - use of foreign keys)
 
 ALTER TABLE public.pokemon 
     ADD CONSTRAINT fk_pokemon_generation FOREIGN KEY (generation_id) REFERENCES public.generation(id),
@@ -166,11 +166,11 @@ ALTER TABLE public.user_party
 
 
 
--- WIDOKI - 2a
--- FUNKCJE AGREGUJĄCE - 2c
--- Rozszerzenie widoków - 6a
+-- VIEWS - 2a
+-- AGGREGATE FUNCTIONS - 2c
+-- Extension of views - 6a
 
--- Widok 1: Type Statistics
+-- View 1: Type Statistics
 CREATE OR REPLACE VIEW public.v_type_statistics AS
 WITH all_types AS (
     SELECT pokemon_type as type, hp, attack, speed FROM public.pokemon
@@ -187,7 +187,7 @@ FROM all_types
 GROUP BY type
 ORDER BY avg_attack DESC;
 
--- Widok 2: Generation Count
+-- View 2: Generation Count
 CREATE OR REPLACE VIEW public.v_generation_counts AS
 SELECT 
     g.name as generation_name,
@@ -197,7 +197,7 @@ LEFT JOIN public.pokemon p ON p.generation_id = g.id
 GROUP BY g.name
 ORDER BY g.name;
 
--- Widok 3: Top Moves
+-- View 3: Top Moves
 CREATE OR REPLACE VIEW public.v_top_moves AS
 SELECT 
     m.name,
@@ -210,7 +210,7 @@ GROUP BY m.id, m.name, m.move_type, m.power
 ORDER BY learned_by_count DESC
 LIMIT 10;
 
--- Widok 4: Strong Types (z klauzulą HAVING - Wymóg 6a - typy dla których average total statysyk jest większy niż 300)
+-- View 4: Strong Types (with HAVING clause - Requirement 6a - types for which average total stats is greater than 300)
 CREATE OR REPLACE VIEW public.v_strong_types AS
 SELECT 
     pokemon_type,
@@ -222,12 +222,12 @@ HAVING AVG(hp + attack + defense + sp_attack + sp_defense + speed) > 300
 ORDER BY avg_total_stats DESC;
 
 
--- INSERTY
+-- INSERTS
 
--- Generacje
-INSERT INTO public.generation (name) VALUES ('I','II','III','IV','V','VI','VII','VIII');
+-- Generations
+INSERT INTO public.generation (name) VALUES ('I'),('II'),('III'),('IV'),('V'),('VI'),('VII'),('VIII');
 
--- Efektywność ataków
+-- Attack effectiveness
 INSERT INTO public.type_effectiveness (attacking_type, defending_type, multiplier) VALUES
 ('Normal', 'Rock', 0.5), ('Normal', 'Ghost', 0.0), ('Normal', 'Steel', 0.5),
 ('Fire', 'Fire', 0.5), ('Fire', 'Water', 0.5), ('Fire', 'Grass', 2.0), ('Fire', 'Ice', 2.0), ('Fire', 'Bug', 2.0), ('Fire', 'Rock', 0.5), ('Fire', 'Dragon', 0.5), ('Fire', 'Steel', 2.0),
@@ -249,7 +249,7 @@ INSERT INTO public.type_effectiveness (attacking_type, defending_type, multiplie
 ('Fairy', 'Fire', 0.5), ('Fairy', 'Fighting', 2.0), ('Fairy', 'Poison', 0.5), ('Fairy', 'Dragon', 2.0), ('Fairy', 'Dark', 2.0), ('Fairy', 'Steel', 0.5)
 ON CONFLICT (attacking_type, defending_type) DO UPDATE SET multiplier = EXCLUDED.multiplier;
 
--- Pokemons  - created_by jest null, dla pokemonów dodanych z bazy
+-- Pokemons  - created_by is null, for pokemons added from the database
 INSERT INTO public.pokemon (
     pokedex_number, name, image_url, pokemon_type, secondary_type, height, weight, 
     description, hp, attack, defense, sp_attack, sp_defense, speed, generation_id

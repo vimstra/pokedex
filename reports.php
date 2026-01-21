@@ -96,7 +96,6 @@ try {
                 <div class="report-title">Type Statistics</div>
                 <div class="report-desc">Average stats for each Pokemon type</div>
             </div>
-            <div style="font-family: monospace; background: #eee; padding: 5px 10px; border-radius: 5px; font-size: 0.8rem;">VIEW: v_type_statistics</div>
         </div>
         
         <table>
@@ -135,7 +134,6 @@ try {
                 <div class="report-title">Most Common Moves</div>
                 <div class="report-desc">Moves learned by the most Pokemons (Top 10)</div>
             </div>
-            <div style="font-family: monospace; background: #eee; padding: 5px 10px; border-radius: 5px; font-size: 0.8rem;">VIEW: v_top_moves</div>
         </div>
 
         <table>
@@ -170,8 +168,7 @@ try {
             <div>
                 <div class="report-title">Generation Distribution</div>
                 <div class="report-desc">Number of Pokemon discovered per generation</div>
-            </div>
-            <div style="font-family: monospace; background: #eee; padding: 5px 10px; border-radius: 5px; font-size: 0.8rem;">VIEW: v_generation_counts</div>
+                </div>
         </div>
 
         <table>
@@ -200,9 +197,8 @@ try {
         <div class="report-header">
             <div>
                 <div class="report-title">Elite Types (Total Stats > 300)</div>
-                <div class="report-desc">Types with high average stats total. Filtered using SQL <strong>HAVING</strong> clause.</div>
+                <div class="report-desc">Types with high average stats total.</div>
             </div>
-            <div style="font-family: monospace; background: #eee; padding: 5px 10px; border-radius: 5px; font-size: 0.8rem;">VIEW: v_strong_types</div>
         </div>
 
         <table>

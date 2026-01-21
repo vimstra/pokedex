@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-// Zabezpieczenie
+// restriction: for Admin only
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'Admin') {
     header("Location: index.php");
     exit;

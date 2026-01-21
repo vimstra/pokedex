@@ -4,6 +4,14 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 session_start();
+
+// sprawdzanie czy pokazać "intro"
+$showLanding = false;
+if (!isset($_SESSION['has_seen_intro'])) {
+    $showLanding = true;
+    $_SESSION['has_seen_intro'] = true;
+}
+
 $registerError = null;
 $loginError = null;
 $dbError = null;
@@ -95,6 +103,10 @@ try {
     $stmtMoves = $pdo->query("SELECT id, name, LOWER(move_type::text) as type, LOWER(category::text) as category, power, accuracy, pp FROM public.move");
     $movesFromDb = $stmtMoves->fetchAll(PDO::FETCH_ASSOC);
 
+    //pulling generation info from db
+    $stmtGens = $pdo->query("SELECT * FROM public.generation ORDER BY id ASC");
+    $generations = $stmtGens->fetchAll(PDO::FETCH_ASSOC);
+
     // pulling my party from db
     $myPartyIds = [];
     if (isset($_SESSION['user_id'])) {
@@ -182,12 +194,46 @@ try {
         .form-group input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-family: inherit; }
         .submit-btn { width: 100%; padding: 12px; background: #DC0A2D; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; text-transform: uppercase; }
 
+.gen-grid {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.gen-btn {
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 20px;
+    padding: 5px 15px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gen-btn:hover {
+    border-color: #aaa;
+    transform: translateY(-2px);
+}
+
+.gen-btn.active {
+    background: #333;
+    border-color: #333;
+    color: white;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
+    <?php if ($showLanding): ?>
     <section id="landing">
         <svg class="pokeball-svg" viewBox="0 0 100 100">
             <path d="M 5,50 A 45,45 0 0,0 95,50 Z" fill="white" stroke="#222" stroke-width="3" />
@@ -197,6 +243,7 @@ try {
             <circle cx="50" cy="50" r="12" fill="white" stroke="#222" stroke-width="3"/>
         </svg>
     </section>
+    <?php endif; ?>
 
     <section id="app-interface">
         <div class="menu-sticky-wrapper">
@@ -235,6 +282,13 @@ try {
         <div class="form-group" style="max-width: 600px; margin: 0 auto 20px auto;">
             <input type="text" id="poke-search" placeholder="Search Pokemon by name..." oninput="updatePokeSearch(this.value)">
         </div>
+
+    <div class="gen-grid" id="gen-filters">
+        <button class="gen-btn active" onclick="setGenFilter('all', this)">All Gens</button>
+        <?php foreach($generations as $g): ?>
+            <button class="gen-btn" onclick="setGenFilter(<?= $g['id'] ?>, this)">Gen <?= $g['name'] ?></button>
+        <?php endforeach; ?>
+    </div>
         
         <div class="types-grid" id="poke-types-container">
             <?php 
@@ -336,288 +390,350 @@ try {
     </section>
 
     <script>
-        const buttons = document.querySelectorAll('.menu-btn');
-        const contents = document.querySelectorAll('.content-display');
+    /* =========================================
+       1. OBSŁUGA ZAKŁADEK I NAWIGACJI
+       ========================================= */
+    const buttons = document.querySelectorAll('.menu-btn');
+    const contents = document.querySelectorAll('.content-display');
 
-        // automatic scroll if error occures
-        window.addEventListener('DOMContentLoaded', () => {
-            const hasLoginError = <?php echo isset($loginError) ? 'true' : 'false'; ?>;
-            const hasRegisterError = <?php echo isset($registerError) ? 'true' : 'false'; ?>;
+    // Automatyczne przewijanie przy błędzie logowania
+    window.addEventListener('DOMContentLoaded', () => {
+        const hasLoginError = <?php echo isset($loginError) ? 'true' : 'false'; ?>;
+        const hasRegisterError = <?php echo isset($registerError) ? 'true' : 'false'; ?>;
 
-            renderPokemons();
+        // Renderujemy widoki na start
+        renderPokemons();
+        renderMoves(); // To było potrzebne!
 
-            if (hasLoginError || hasRegisterError) {
-                document.getElementById('app-interface').scrollIntoView();
-                const targetId = hasLoginError ? 'signin' : 'signup';
-                switchTab(targetId);
-            }
-        });
-
-        function switchTab(targetId) {
-            contents.forEach(c => {
-                c.classList.remove('visible');
-                c.style.display = 'none';
-            });
-            buttons.forEach(b => b.classList.remove('active'));
-
-            const targetBtn = document.querySelector(`.menu-btn[data-target="${targetId}"]`);
-            const targetContent = document.getElementById(targetId);
-            
-            if (targetBtn && targetContent) {
-                targetBtn.classList.add('active');
-                targetContent.style.display = 'block';
-                setTimeout(() => targetContent.classList.add('visible'), 10);
-            }
+        if (hasLoginError || hasRegisterError) {
+            document.getElementById('app-interface').scrollIntoView();
+            const targetId = hasLoginError ? 'signin' : 'signup';
+            switchTab(targetId);
         }
+    });
 
-        buttons.forEach(button => {
-            button.addEventListener('click', () => {
-                if (button.tagName === 'A') return;
-                const targetId = button.getAttribute('data-target');
-                if (targetId === 'my-party') {
-                    renderMyParty();
-                }
-                switchTab(targetId);
-            });
+    function switchTab(targetId) {
+        contents.forEach(c => {
+            c.classList.remove('visible');
+            c.style.display = 'none';
         });
+        buttons.forEach(b => b.classList.remove('active'));
 
-        const allPokemons = <?php echo json_encode($pokemons); ?>;
+        const targetBtn = document.querySelector(`.menu-btn[data-target="${targetId}"]`);
+        const targetContent = document.getElementById(targetId);
         
-        let pokeState = {
-            search: "",
-            selectedTypes: []
-        };
-
-        function updatePokeSearch(val) {
-            pokeState.search = val.toLowerCase();
-            renderPokemons();
+        if (targetBtn && targetContent) {
+            targetBtn.classList.add('active');
+            targetContent.style.display = 'block';
+            setTimeout(() => targetContent.classList.add('visible'), 10);
         }
+    }
 
-        function togglePokeType(type, btnElement) {
-            const index = pokeState.selectedTypes.indexOf(type);
-            if (index > -1) {
-                pokeState.selectedTypes.splice(index, 1);
-            } else {
-                if (pokeState.selectedTypes.length >= 2) pokeState.selectedTypes.shift(); 
-                pokeState.selectedTypes.push(type);
+    buttons.forEach(button => {
+        button.addEventListener('click', () => {
+            if (button.tagName === 'A') return;
+            const targetId = button.getAttribute('data-target');
+            
+            // Odświeżanie My Party przy kliknięciu
+            if (targetId === 'my-party') {
+                renderMyParty();
             }
-            updateTypeButtonsUI();
-            renderPokemons();
+            switchTab(targetId);
+        });
+    });
+
+
+    /* =========================================
+       2. LOGIKA POKEMONÓW (Search + Type + Gen)
+       ========================================= */
+    const allPokemons = <?php echo json_encode($pokemons); ?>;
+    
+    let pokeState = {
+        search: "",
+        selectedTypes: [], // Max 2 elementy
+        generation: 'all'
+    };
+
+    function updatePokeSearch(val) {
+        pokeState.search = val.toLowerCase();
+        renderPokemons();
+    }
+
+    function setGenFilter(genId, btn) {
+        pokeState.generation = genId;
+        document.querySelectorAll('#gen-filters .gen-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderPokemons();
+    }
+
+    function togglePokeType(type, btnElement) {
+        const index = pokeState.selectedTypes.indexOf(type);
+        if (index > -1) {
+            pokeState.selectedTypes.splice(index, 1);
+        } else {
+            if (pokeState.selectedTypes.length >= 2) pokeState.selectedTypes.shift(); 
+            pokeState.selectedTypes.push(type);
         }
+        updateTypeButtonsUI();
+        renderPokemons();
+    }
 
-        function updateTypeButtonsUI() {
-            const btns = document.querySelectorAll('#poke-types-container .type-btn');
-            btns.forEach(btn => {
-                const typeName = Array.from(btn.classList).find(c => c.startsWith('type-') && c !== 'type-btn').replace('type-', '');
-                if (pokeState.selectedTypes.includes(typeName)) btn.classList.add('active');
-                else btn.classList.remove('active');
-            });
-        }
+    function updateTypeButtonsUI() {
+        const btns = document.querySelectorAll('#poke-types-container .type-btn');
+        btns.forEach(btn => {
+            const typeName = Array.from(btn.classList).find(c => c.startsWith('type-') && c !== 'type-btn').replace('type-', '');
+            if (pokeState.selectedTypes.includes(typeName)) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+    }
 
-        function resetPokeFilters() {
-            pokeState.search = "";
-            pokeState.selectedTypes = [];
-            document.getElementById('poke-search').value = "";
-            updateTypeButtonsUI();
-            renderPokemons();
-        }
+    function resetPokeFilters() {
+        pokeState.search = "";
+        pokeState.selectedTypes = [];
+        pokeState.generation = 'all';
+        document.getElementById('poke-search').value = "";
+        
+        // Reset UI
+        updateTypeButtonsUI();
+        document.querySelectorAll('#gen-filters .gen-btn').forEach(b => b.classList.remove('active'));
+        const allBtn = document.querySelector('#gen-filters .gen-btn');
+        if(allBtn) allBtn.classList.add('active');
 
-        function renderPokemons() {
-            const container = document.getElementById('poke-grid-container');
-            const filtered = allPokemons.filter(p => {
-                if (!p.name.toLowerCase().includes(pokeState.search)) return false;
-                if (pokeState.selectedTypes.length === 0) return true;
+        renderPokemons();
+    }
 
-                const pType1 = p.pokemon_type.toLowerCase();
-                const pType2 = p.secondary_type ? p.secondary_type.toLowerCase() : null;
+    function renderPokemons() {
+        const container = document.getElementById('poke-grid-container');
+        
+        const filtered = allPokemons.filter(p => {
+            // Filtr nazwy
+            if (!p.name.toLowerCase().includes(pokeState.search)) return false;
+            // Filtr generacji
+            if (pokeState.generation !== 'all' && p.generation_id != pokeState.generation) return false;
+            // Filtr typów
+            if (pokeState.selectedTypes.length === 0) return true;
 
-                if (pokeState.selectedTypes.length === 1) {
-                    const filter = pokeState.selectedTypes[0];
-                    return pType1 === filter || pType2 === filter;
-                } 
-                if (pokeState.selectedTypes.length === 2) {
-                    const filter1 = pokeState.selectedTypes[0];
-                    const filter2 = pokeState.selectedTypes[1];
-                    const pokemonTypes = [pType1, pType2];
-                    return pokemonTypes.includes(filter1) && pokemonTypes.includes(filter2);
-                }
-                return true;
-            });
+            const pType1 = p.pokemon_type.toLowerCase();
+            const pType2 = p.secondary_type ? p.secondary_type.toLowerCase() : null;
 
-            if (filtered.length === 0) {
-                container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #999;">No Pokemon found matching criteria.</p>';
-                return;
+            if (pokeState.selectedTypes.length === 1) {
+                const filter = pokeState.selectedTypes[0];
+                return pType1 === filter || pType2 === filter;
+            } 
+            if (pokeState.selectedTypes.length === 2) {
+                const filter1 = pokeState.selectedTypes[0];
+                const filter2 = pokeState.selectedTypes[1];
+                const pokemonTypes = [pType1, pType2];
+                return pokemonTypes.includes(filter1) && pokemonTypes.includes(filter2);
             }
+            return true;
+        });
 
-            container.innerHTML = filtered.map(p => `
-                <a href="pokemon_card.php?id=${p.id}" class="poke-tile" style="text-decoration: none; color: inherit;">
-                    <div class="tile-content">
-                        <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" class="poke-img">
-                        <span class="poke-name">${escapeHtml(p.name)}</span>
-                    </div>
-                    <span class="poke-index">#${String(p.pokedex_number).padStart(3, '0')}</span>
-                    <div style="margin-bottom:10px; display:flex; gap:5px; justify-content:center;">
-                         <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.pokemon_type.toLowerCase()}">${p.pokemon_type}</span>
-                         ${p.secondary_type ? `<span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.secondary_type.toLowerCase()}">${p.secondary_type}</span>` : ''}
+        if (filtered.length === 0) {
+            container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #999;">No Pokemon found matching criteria.</p>';
+            return;
+        }
+
+        container.innerHTML = filtered.map(p => `
+            <a href="pokemon_card.php?id=${p.id}" class="poke-tile" style="text-decoration: none; color: inherit;">
+                <div class="tile-content">
+                    <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" class="poke-img">
+                    <span class="poke-name">${escapeHtml(p.name)}</span>
+                </div>
+                <span class="poke-index">#${String(p.pokedex_number).padStart(3, '0')}</span>
+                <div style="margin-bottom:10px; display:flex; gap:5px; justify-content:center;">
+                        <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.pokemon_type.toLowerCase()}">${p.pokemon_type}</span>
+                        ${p.secondary_type ? `<span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.secondary_type.toLowerCase()}">${p.secondary_type}</span>` : ''}
+                </div>
+            </a>
+        `).join('');
+    }
+
+
+    /* =========================================
+       3. LOGIKA ATAKÓW (MOVES) - PRZYWRÓCONA
+       ========================================= */
+    const allMoves = <?php echo json_encode($movesFromDb); ?>;
+    let moveState = { type: null, category: null, search: "" };
+
+    function updateMoveSearch(value) {
+        moveState.search = value.toLowerCase();
+        renderMoves();
+    }
+
+    function setMoveFilter(filterType, value) {
+        if (filterType === 'reset') {
+            moveState.type = null;
+            moveState.category = null;
+            moveState.search = "";
+            document.getElementById('move-search').value = "";
+        } else {
+            // Toggle
+            moveState[filterType] = (moveState[filterType] === value) ? null : value;
+        }
+
+        // UI Update
+        document.querySelectorAll('#moves .type-btn').forEach(btn => {
+            btn.classList.remove('active');
+            // Logika dla typu
+            if (moveState.type && btn.classList.contains('type-' + moveState.type)) {
+                btn.classList.add('active');
+            }
+            // Logika dla kategorii
+            if (moveState.category && btn.classList.contains('category-' + moveState.category)) {
+                btn.classList.add('active');
+            }
+        });
+
+        renderMoves();
+    }
+
+    function renderMoves() {
+        const listContainer = document.getElementById('moves-list-container');
+        
+        const filtered = allMoves.filter(move => {
+            const matchType = moveState.type ? move.type === moveState.type : true;
+            const matchCategory = moveState.category ? move.category === moveState.category : true;
+            const matchSearch = move.name.toLowerCase().includes(moveState.search);
+            return matchType && matchCategory && matchSearch;
+        });
+
+        if (!moveState.type && !moveState.category && !moveState.search) {
+            listContainer.innerHTML = '<p style="text-align: center; color: #999; margin-top: 30px;">Select filters or type a name.</p>';
+            return;
+        }
+
+        listContainer.innerHTML = filtered.length ? filtered.map(move => `
+            <a href="move_card.php?id=${move.id}" class="move-item" style="text-decoration:none; color:inherit; display:flex;">
+                <div style="flex:1;">
+                    <div class="move-name">${move.name}</div>
+                    <div style="font-size:0.7rem; color:#888;">
+                        PWR: ${move.power || '--'} | ACC: ${move.accuracy ? (move.accuracy*100)+'%' : '--'} | PP: ${move.pp}
                     </div>
                 </div>
-            `).join('');
-        }
-
-        function escapeHtml(text) {
-            if (!text) return text;
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        }
-
-
-        // moves logic
-        const allMoves = <?php echo json_encode($movesFromDb); ?>;
-        let moveState = { type: null, category: null, search: "" };
-
-        function updateMoveSearch(value) {
-            moveState.search = value.toLowerCase();
-            renderMoves();
-        }
-
-        function setMoveFilter(filterType, value) {
-            if (filterType === 'reset') {
-                moveState.type = null;
-                moveState.category = null;
-                moveState.search = "";
-                document.getElementById('move-search').value = "";
-            } else {
-                moveState[filterType] = (moveState[filterType] === value) ? null : value;
-            }
-            document.querySelectorAll('#moves .type-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (moveState.type && btn.classList.contains('type-' + moveState.type)) btn.classList.add('active');
-                if (moveState.category && btn.classList.contains('category-' + moveState.category)) btn.classList.add('active');
-            });
-            renderMoves();
-        }
-
-        function renderMoves() {
-            const listContainer = document.getElementById('moves-list-container');
-            const filtered = allMoves.filter(move => {
-                const matchType = moveState.type ? move.type === moveState.type : true;
-                const matchCategory = moveState.category ? move.category === moveState.category : true;
-                const matchSearch = move.name.toLowerCase().includes(moveState.search);
-                return matchType && matchCategory && matchSearch;
-            });
-
-            if (!moveState.type && !moveState.category && !moveState.search) {
-                listContainer.innerHTML = '<p style="text-align: center; color: #999; margin-top: 30px;">Select filters or type a name.</p>';
-                return;
-            }
-            listContainer.innerHTML = filtered.length ? filtered.map(move => `
-                <a href="move_card.php?id=${move.id}" class="move-item" style="text-decoration:none; color:inherit; display:flex;">
-                    <div>
-                        <div class="move-name">${move.name}</div>
-                        <div style="font-size:0.7rem; color:#888;">
-                            PWR: ${move.power || '--'} | ACC: ${move.accuracy ? (move.accuracy*100)+'%' : '--'} | PP: ${move.pp}
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <span class="type-btn type-${move.type}" style="opacity:1; font-size:0.6rem; padding: 4px 10px; cursor: default; pointer-events: none;">${move.type}</span>
-                        <span class="type-btn category-${move.category}" style="opacity:1; font-size:0.6rem; padding: 4px 10px; cursor: default; pointer-events: none;">${move.category}</span>
-                    </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span class="type-btn type-${move.type}" style="opacity:1; font-size:0.6rem; padding: 4px 10px; cursor: default; pointer-events: none;">
+                        ${move.type}
+                    </span>
+                    <span class="type-btn category-${move.category}" style="opacity:1; font-size:0.6rem; padding: 4px 10px; cursor: default; pointer-events: none;">
+                        ${move.category}
+                    </span>
                 </div>
-            `).join('') : '<p style="text-align:center; margin-top:20px;">No moves match your criteria.</p>';
+            </a>
+        `).join('') : '<p style="text-align:center; margin-top:20px;">No moves match your criteria.</p>';
+    }
+
+
+    /* =========================================
+       4. LOGIKA TYPE CHART (KALKULATOR)
+       ========================================= */
+    const chartData = <?php echo json_encode($typeChart); ?>;
+    let chartState = { attacker: null, defenders: [] };
+
+    function selectChartAttacker(type, btnElement) {
+        if (chartState.attacker === type) {
+            chartState.attacker = null;
+        } else {
+            chartState.attacker = type;
         }
+        updateChartUI();
+        calculateChart();
+    }
 
-// type chart logic
-        const chartData = <?php echo json_encode($typeChart); ?>;
-        let chartState = { attacker: null, defenders: [] };
+    function toggleChartDefender(type, btnElement) {
+        const index = chartState.defenders.indexOf(type);
+        if (index > -1) {
+            chartState.defenders.splice(index, 1);
+        } else {
+            if (chartState.defenders.length >= 2) chartState.defenders.shift();
+            chartState.defenders.push(type);
+        }
+        updateChartUI();
+        calculateChart();
+    }
 
-        function selectChartAttacker(type, btnElement) {
-            if (chartState.attacker === type) {
-                chartState.attacker = null;
-            } else {
-                chartState.attacker = type;
+    function updateChartUI() {
+        document.querySelectorAll('#chart-attacker-container .type-btn').forEach(btn => {
+            const typeName = Array.from(btn.classList).find(c => c.startsWith('type-') && c !== 'type-btn').replace('type-', '');
+            if (chartState.attacker === typeName) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+        document.querySelectorAll('#chart-defender-container .type-btn').forEach(btn => {
+            const typeName = Array.from(btn.classList).find(c => c.startsWith('type-') && c !== 'type-btn').replace('type-', '');
+            if (chartState.defenders.includes(typeName)) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+    }
+
+    function calculateChart() {
+        const valDiv = document.getElementById('chart-value');
+        const descDiv = document.getElementById('chart-desc');
+        
+        if (!chartState.attacker || chartState.defenders.length === 0) {
+            valDiv.innerText = '-';
+            descDiv.innerText = 'Select Attacker & Defender';
+            valDiv.style.color = '#333';
+            return;
+        }
+        
+        // Capitalize helper
+        const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+        const atk = capitalize(chartState.attacker);
+        let multiplier = 1.0;
+        
+        chartState.defenders.forEach(defLower => {
+            const def = capitalize(defLower);
+            let val = 1.0;
+            if (chartData[atk] && chartData[atk][def] !== undefined) {
+                val = chartData[atk][def];
             }
-            updateChartUI();
-            calculateChart();
+            multiplier *= val;
+        });
+        
+        valDiv.innerText = multiplier + 'x';
+        if (multiplier === 0) { valDiv.style.color = '#333'; descDiv.innerText = 'No Effect!'; }
+        else if (multiplier < 1) { valDiv.style.color = '#a04040'; descDiv.innerText = 'Not very effective...'; }
+        else if (multiplier === 1) { valDiv.style.color = '#333'; descDiv.innerText = 'Normal damage'; }
+        else if (multiplier > 1) { valDiv.style.color = '#4caf50'; descDiv.innerText = 'Super Effective!'; }
+        if (multiplier >= 4) { valDiv.style.color = '#DC0A2D'; descDiv.innerText = 'Ultra Effective!'; }
+    }
+
+
+    /* =========================================
+       5. LOGIKA MY PARTY
+       ========================================= */
+    const partyIds = <?php echo json_encode($myPartyIds ?? []); ?>;
+    const partyContainer = document.getElementById('party-grid-container');
+
+    function renderMyParty() {
+        // Filtrujemy globalną listę pokemonów po ID z party
+        const partyPokemons = allPokemons.filter(p => partyIds.includes(p.id));
+
+        if (partyPokemons.length === 0) {
+            partyContainer.innerHTML = '<p style="text-align:center; color:#999; grid-column:1/-1;">Your party is empty. Add pokemons from their cards!</p>';
+            return;
         }
 
-        function toggleChartDefender(type, btnElement) {
-            const index = chartState.defenders.indexOf(type);
-            if (index > -1) {
-                chartState.defenders.splice(index, 1);
-            } else {
-                if (chartState.defenders.length >= 2) chartState.defenders.shift();
-                chartState.defenders.push(type);
-            }
-            updateChartUI();
-            calculateChart();
-        }
+        partyContainer.innerHTML = partyPokemons.map(p => `
+            <a href="pokemon_card.php?id=${p.id}" class="poke-tile" style="text-decoration: none; color: inherit;">
+                <div class="tile-content">
+                    <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" class="poke-img">
+                    <span class="poke-name">${escapeHtml(p.name)}</span>
+                </div>
+                <span class="poke-index">#${String(p.pokedex_number).padStart(3, '0')}</span>
+                <div style="margin-bottom:10px; display:flex; gap:5px; justify-content:center;">
+                     <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.pokemon_type.toLowerCase()}">${p.pokemon_type}</span>
+                     ${p.secondary_type ? `<span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.secondary_type.toLowerCase()}">${p.secondary_type}</span>` : ''}
+                </div>
+            </a>
+        `).join('');
+    }
 
-        function updateChartUI() {
-            document.querySelectorAll('#chart-attacker-container .type-btn').forEach(btn => {
-                const typeName = Array.from(btn.classList).find(c => c.startsWith('type-') && c !== 'type-btn').replace('type-', '');
-                if (chartState.attacker === typeName) btn.classList.add('active');
-                else btn.classList.remove('active');
-            });
-            document.querySelectorAll('#chart-defender-container .type-btn').forEach(btn => {
-                const typeName = Array.from(btn.classList).find(c => c.startsWith('type-') && c !== 'type-btn').replace('type-', '');
-                if (chartState.defenders.includes(typeName)) btn.classList.add('active');
-                else btn.classList.remove('active');
-            });
-        }
-
-        function calculateChart() {
-            const valDiv = document.getElementById('chart-value');
-            const descDiv = document.getElementById('chart-desc');
-            if (!chartState.attacker || chartState.defenders.length === 0) {
-                valDiv.innerText = '-';
-                descDiv.innerText = 'Select Attacker & Defender';
-                valDiv.style.color = '#333';
-                return;
-            }
-            const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-            const atk = capitalize(chartState.attacker);
-            let multiplier = 1.0;
-            chartState.defenders.forEach(defLower => {
-                const def = capitalize(defLower);
-                let val = 1.0;
-                if (chartData[atk] && chartData[atk][def] !== undefined) {
-                    val = chartData[atk][def];
-                }
-                multiplier *= val;
-            });
-            valDiv.innerText = multiplier + 'x';
-            if (multiplier === 0) { valDiv.style.color = '#333'; descDiv.innerText = 'No Effect!'; }
-            else if (multiplier < 1) { valDiv.style.color = '#a04040'; descDiv.innerText = 'Not very effective...'; }
-            else if (multiplier === 1) { valDiv.style.color = '#333'; descDiv.innerText = 'Normal damage'; }
-            else if (multiplier > 1) { valDiv.style.color = '#4caf50'; descDiv.innerText = 'Super Effective!'; }
-            if (multiplier >= 4) { valDiv.style.color = '#DC0A2D'; descDiv.innerText = 'Ultra Effective!'; }
-        }
-
-        const partyIds = <?php echo json_encode($myPartyIds ?? []); ?>;
-        const partyContainer = document.getElementById('party-grid-container');
-
-        function renderMyParty() {
-            const partyPokemons = allPokemons.filter(p => partyIds.includes(p.id));
-
-            if (partyPokemons.length === 0) {
-                partyContainer.innerHTML = '<p style="text-align:center; color:#999; grid-column:1/-1;">Your party is empty. Add pokemons from their cards!</p>';
-                return;
-            }
-
-            partyContainer.innerHTML = partyPokemons.map(p => `
-                <a href="pokemon_card.php?id=${p.id}" class="poke-tile" style="text-decoration: none; color: inherit;">
-                    <div class="tile-content">
-                        <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" class="poke-img">
-                        <span class="poke-name">${escapeHtml(p.name)}</span>
-                    </div>
-                    <span class="poke-index">#${String(p.pokedex_number).padStart(3, '0')}</span>
-                    <div style="margin-bottom:10px; display:flex; gap:5px; justify-content:center;">
-                         <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.pokemon_type.toLowerCase()}">${p.pokemon_type}</span>
-                         ${p.secondary_type ? `<span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; color:white;" class="type-${p.secondary_type.toLowerCase()}">${p.secondary_type}</span>` : ''}
-                    </div>
-                </a>
-            `).join('');
-        }
-
-    </script>
+    // Helper XSS protection
+    function escapeHtml(text) {
+        if (!text) return text;
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+</script>
 </body>
 </html>
